@@ -1,3 +1,12 @@
+## 2026-02-13（网络代理设置）✅
+
+- **需求**（用户提出"添加代理的功能"，此前已规划）：应用内可配置网络代理，用于在线市场等网络请求
+- **实现**：
+  - 设置面板新增「网络代理」区块：模式（不使用 / HTTP / SOCKS5）+ 地址 + 端口 + 可选用户名密码，一键保存
+  - 持久化：config.json 的 proxy.mode / proxy.host / proxy.port / proxy.username / proxy.password
+  - Rust：ureq 升级 socks-proxy feature；market_agent() 按配置构造 Agent（Proxy::new 支持 user:pass@）；market_remote_list / market_remote_install 统一走该 Agent；代理信息写入操作日志
+  - 无代理（mode=none）时行为与之前完全一致
+- **验证**：cargo check 通过；svelte-check 0 错误 0 警告
 ## 2026-02-13（发布 v0.2.0：在线插件市场）✅
 
 - **新功能**：在线插件市场（GitHub 仓库 HomeDesktopPlugins，jsDelivr CDN 分发；市场页新增在线页签；plugin.marketUrl 可配置）

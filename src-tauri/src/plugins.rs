@@ -349,10 +349,11 @@ pub struct DownloadProgress {
     pub total: Option<u64>,
 }
 
-/// 拉取在线市场索引（异步：下载在阻塞线程池执行，不卡 UI）
+/// 拉取在线市场索引（异步：下载在阻塞线程池执行，不卡 UI；自动应用代理设置）
 #[tauri::command]
 pub async fn market_remote_list(app: AppHandle, url: String) -> Result<RemoteMarket, String> {
-    let body = tauri::async_runtime::spawn_blocking(move || fetch_text(&url))
+    let agent = market_agent(&app)?;
+    let body = tauri::async_runtime::spawn_blocking(move || fetch_text(&agent, &url))
         .await
         .map_err(|e| format!("索引拉取任务失败: {e}"))??;
     let index: RemoteIndex =
@@ -404,8 +405,9 @@ pub async fn market_remote_install(
     let url = format!("{}/{}", base.trim_end_matches('/'), file_name);
     crate::log::info(&format!("在线市场下载: {url}"));
 
+    let agent = market_agent(&app)?;
     let result = tauri::async_runtime::spawn_blocking(move || -> Result<PluginInfo, String> {
-        download_to_with_progress(&url, &zip_path, &on_progress)?;
+        download_to_with_progress(&agent, &url, &zip_path, &on_progress)?;
         crate::log::info(&format!(
             "下载完成: {} ({} bytes)",
             file_name,
@@ -421,9 +423,35 @@ pub async fn market_remote_install(
     Ok(result)
 }
 
+/// 按配置构造在线市场 HTTP agent（代理设置：proxy.mode=none|http|socks5 + host/port/username/password）
+fn market_agent(app: &AppHandle) -> Result<ureq::Agent, String> {
+    let mode = crate::config::get_str(app, "proxy.mode").unwrap_or_else(|| "none".into());
+    if mode.is_empty() || mode == "none" {
+        return Ok(ureq::AgentBuilder::new().build());
+    }
+    let host = crate::config::get_str(app, "proxy.host").unwrap_or_default();
+    let port = crate::config::get_str(app, "proxy.port").unwrap_or_default();
+    if host.trim().is_empty() || port.trim().is_empty() {
+        return Err("代理未配置完整（缺少地址或端口）".to_string());
+    }
+    let user = crate::config::get_str(app, "proxy.username").unwrap_or_default();
+    let pass = crate::config::get_str(app, "proxy.password").unwrap_or_default();
+    let auth = if !user.is_empty() {
+        format!("{user}:{pass}@")
+    } else {
+        String::new()
+    };
+    let scheme = if mode == "socks5" { "socks5" } else { "http" };
+    let url = format!("{scheme}://{auth}{}:{}", host.trim(), port.trim());
+    crate::log::info(&format!("使用代理: {scheme}://{host}:{port}"));
+    let proxy = ureq::Proxy::new(&url).map_err(|e| format!("代理配置无效: {e}"))?;
+    Ok(ureq::AgentBuilder::new().proxy(proxy).build())
+}
+
 /// GET 文本（超时 30s）
-fn fetch_text(url: &str) -> Result<String, String> {
-    let resp = ureq::get(url)
+fn fetch_text(agent: &ureq::Agent, url: &str) -> Result<String, String> {
+    let resp = agent
+        .get(url)
         .timeout(std::time::Duration::from_secs(30))
         .call()
         .map_err(|e| format!("请求失败: {e}"))?;
@@ -432,6 +460,7 @@ fn fetch_text(url: &str) -> Result<String, String> {
 
 /// 下载到本地文件并推送进度（最多 64MB，防异常大包）
 fn download_to_with_progress(
+    agent: &ureq::Agent,
     url: &str,
     dest: &std::path::Path,
     progress: &tauri::ipc::Channel<DownloadProgress>,
@@ -445,7 +474,8 @@ fn download_to_with_progress(
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_default();
 
-    let resp = ureq::get(url)
+    let resp = agent
+        .get(url)
         .timeout(std::time::Duration::from_secs(60))
         .call()
         .map_err(|e| format!("下载失败: {e}"))?;

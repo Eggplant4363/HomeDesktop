@@ -161,6 +161,7 @@
     customColor =
       getCurrentBackground().kind === "color" ? getCurrentBackground().value : "#10141c";
     autoStart = await autostartEnabled();
+    void loadProxy();
 
     // ---------- 全屏 Pad（M6） ----------
     const win = getCurrentWindow();
@@ -694,6 +695,48 @@
     log.info(`开机自启: ${autoStart ? "开启" : "关闭"}`);
   }
 
+  // ---------- 网络代理（在线市场等网络请求使用） ----------
+  let proxyForm = $state({
+    mode: "none",
+    host: "",
+    port: "",
+    username: "",
+    password: "",
+  });
+
+  async function loadProxy(): Promise<void> {
+    try {
+      const g = (key: string) => invoke<string | null>("config_get", { key });
+      proxyForm.mode = (await g("proxy.mode")) ?? "none";
+      proxyForm.host = (await g("proxy.host")) ?? "";
+      proxyForm.port = (await g("proxy.port")) ?? "";
+      proxyForm.username = (await g("proxy.username")) ?? "";
+      proxyForm.password = (await g("proxy.password")) ?? "";
+    } catch (e) {
+      log.error(`读取代理配置失败: ${e}`);
+    }
+  }
+
+  async function saveProxy(): Promise<void> {
+    try {
+      const s = (key: string, value: unknown) => invoke("config_set", { key, value });
+      await s("proxy.mode", proxyForm.mode);
+      await s("proxy.host", proxyForm.host.trim());
+      await s("proxy.port", proxyForm.port.trim());
+      await s("proxy.username", proxyForm.username);
+      await s("proxy.password", proxyForm.password);
+      const desc =
+        proxyForm.mode === "none"
+          ? "已关闭"
+          : `${proxyForm.mode}://${proxyForm.host}:${proxyForm.port}`;
+      log.info(`代理设置已保存: ${desc}`);
+      toast(`代理设置已保存（${desc}）`);
+    } catch (e) {
+      log.error(`保存代理配置失败: ${e}`);
+      toast(`保存失败：${e}`, 4000);
+    }
+  }
+
   /** 编辑模式开关（苹果风格：编辑中显示缩放/删除等操作） */
   function handleToggleEdit(): void {
     if (ui.editMode) {
@@ -859,6 +902,42 @@
         <div class="set-section">
           <div class="set-label">插件</div>
           <button class="wallpaper-btn" onclick={openPlugins}>🧩 打开插件管理（已安装 / 市场）…</button>
+        </div>
+
+        <div class="set-section">
+          <div class="set-label">网络代理（在线市场下载使用）</div>
+          <div class="proxy-row">
+            <select class="proxy-select" bind:value={proxyForm.mode}>
+              <option value="none">不使用代理</option>
+              <option value="http">HTTP 代理</option>
+              <option value="socks5">SOCKS5 代理</option>
+            </select>
+          </div>
+          <div class="proxy-row">
+            <input class="proxy-input" placeholder="代理地址（如 127.0.0.1）" bind:value={proxyForm.host} />
+            <input
+              class="proxy-input port"
+              placeholder="端口（如 7890）"
+              bind:value={proxyForm.port}
+            />
+          </div>
+          <div class="proxy-row">
+            <input
+              class="proxy-input"
+              placeholder="用户名（可选）"
+              bind:value={proxyForm.username}
+            />
+            <input
+              class="proxy-input"
+              type="password"
+              placeholder="密码（可选）"
+              bind:value={proxyForm.password}
+            />
+          </div>
+          <div class="proxy-row">
+            <button class="wallpaper-btn" onclick={() => void saveProxy()}>💾 保存代理设置</button>
+            <span class="proxy-hint">保存后重新打开在线市场即生效</span>
+          </div>
         </div>
 
         <div class="set-section">
@@ -1550,5 +1629,37 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .proxy-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    align-items: center;
+  }
+  .proxy-select {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-input);
+    color: var(--fg);
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+  .proxy-input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-input);
+    color: var(--fg);
+    font-size: 13px;
+    padding: 8px 10px;
+    min-width: 0;
+  }
+  .proxy-input.port {
+    flex: 0 0 90px;
+  }
+  .proxy-hint {
+    font-size: 11px;
+    color: var(--fg-dim);
   }
 </style>
