@@ -283,3 +283,141 @@ pub fn market_scan(app: AppHandle) -> Result<MarketScan, String> {
         items,
     })
 }
+
+// ---------- 在线市场（远程仓库）：拉取 index.json + 下载 zip 安装 ----------
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteMarketItem {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub plugin_type: String,
+    pub emoji: Option<String>,
+    /// zip 文件名（相对 base 下载）
+    pub file: String,
+    /// 字节数（索引提供时显示）
+    pub size: Option<u64>,
+    pub description: Option<String>,
+    /// 是否已安装
+    pub installed: bool,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteMarket {
+    pub base: String,
+    pub items: Vec<RemoteMarketItem>,
+}
+
+/// 在线市场索引 JSON 结构（仓库 market/index.json）
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteIndex {
+    /// zip 下载基础 URL（末尾带 /）
+    base: String,
+    #[serde(default)]
+    plugins: Vec<RemoteIndexItem>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RemoteIndexItem {
+    id: String,
+    name: String,
+    version: String,
+    #[serde(rename = "pluginType", default)]
+    plugin_type: String,
+    #[serde(default)]
+    emoji: Option<String>,
+    file: String,
+    #[serde(default)]
+    size: Option<u64>,
+    #[serde(default)]
+    description: Option<String>,
+}
+
+/// 拉取在线市场索引（默认指向 GitHub 仓库的 market/index.json）
+#[tauri::command]
+pub fn market_remote_list(app: AppHandle, url: String) -> Result<RemoteMarket, String> {
+    let body = fetch_text(&url)?;
+    let index: RemoteIndex =
+        serde_json::from_str(&body).map_err(|e| format!("索引 JSON 解析失败: {e}"))?;
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let items = index
+        .plugins
+        .into_iter()
+        .map(|p| RemoteMarketItem {
+            installed: data_dir.join("plugins").join(&p.id).is_dir(),
+            id: p.id,
+            name: p.name,
+            version: p.version,
+            plugin_type: p.plugin_type,
+            emoji: p.emoji,
+            file: p.file,
+            size: p.size,
+            description: p.description,
+        })
+        .collect();
+    Ok(RemoteMarket {
+        base: index.base,
+        items,
+    })
+}
+
+/// 从在线市场下载 zip 并安装（下载到本地 market/ 后走 plugins_install 同一条安装链路）
+#[tauri::command]
+pub fn market_remote_install(
+    app: AppHandle,
+    base: String,
+    file: String,
+) -> Result<PluginInfo, String> {
+    // 文件名防穿越：只允许普通文件名
+    let file_name = std::path::Path::new(&file)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .filter(|s| s.ends_with(".zip") && !s.contains('/') && !s.contains('\\'))
+        .ok_or_else(|| "非法的插件包文件名".to_string())?;
+
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let market_dir = data_dir.join("market");
+    std::fs::create_dir_all(&market_dir).map_err(|e| e.to_string())?;
+    let zip_path = market_dir.join(file_name);
+
+    let url = format!("{}{}", base.trim_end_matches('/'), file_name);
+    crate::log::info(&format!("在线市场下载: {url}"));
+    download_to(&url, &zip_path)?;
+    crate::log::info(&format!("下载完成: {} ({} bytes)", file_name, zip_path.metadata().map(|m| m.len()).unwrap_or(0)));
+
+    // 复用本地安装逻辑（校验 manifest + 解压到 plugins/<id>/）
+    let installed = plugins_install(app, zip_path.to_string_lossy().into_owned())?;
+    crate::log::info(&format!("在线市场安装成功: {} v{}", installed.name, installed.version));
+    Ok(installed)
+}
+
+/// GET 文本（超时 30s）
+fn fetch_text(url: &str) -> Result<String, String> {
+    let resp = ureq::get(url)
+        .timeout(std::time::Duration::from_secs(30))
+        .call()
+        .map_err(|e| format!("请求失败: {e}"))?;
+    resp.into_string().map_err(|e| format!("读取响应失败: {e}"))
+}
+
+/// 下载到本地文件（最多 64MB，防异常大包）
+fn download_to(url: &str, dest: &std::path::Path) -> Result<(), String> {
+    use std::io::Read;
+    const MAX: u64 = 64 * 1024 * 1024;
+    let resp = ureq::get(url)
+        .timeout(std::time::Duration::from_secs(60))
+        .call()
+        .map_err(|e| format!("下载失败: {e}"))?;
+    let mut reader = resp.into_reader().take(MAX + 1);
+    let mut out = std::fs::File::create(dest).map_err(|e| format!("写文件失败: {e}"))?;
+    let copied = std::io::copy(&mut reader, &mut out).map_err(|e| format!("下载中断: {e}"))?;
+    if copied > MAX {
+        let _ = std::fs::remove_file(dest);
+        return Err("插件包超过 64MB 限制".to_string());
+    }
+    Ok(())
+}

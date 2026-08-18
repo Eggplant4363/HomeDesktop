@@ -78,6 +78,8 @@ pub fn run() {
             plugins::plugins_install,
             plugins::plugins_uninstall,
             plugins::market_scan,
+            plugins::market_remote_list,
+            plugins::market_remote_install,
             config::config_get,
             config::config_set,
             config::set_wallpaper,

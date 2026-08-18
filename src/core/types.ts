@@ -62,6 +62,18 @@ export interface MarketItem {
   installed: boolean;
 }
 
+/** 在线市场项（远程仓库 index.json） */
+export interface RemoteMarketItem extends MarketItem {
+  size?: number;
+  description?: string;
+}
+
+/** 在线市场（远程仓库索引） */
+export interface RemoteMarket {
+  base: string;
+  items: RemoteMarketItem[];
+}
+
 /** 图标单元（网格内与文件夹内共用） */
 export interface IconCell {
   kind: "icon";

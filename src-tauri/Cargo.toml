@@ -25,6 +25,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 zip = "2"
 base64 = "0.22"
+ureq = "2"
 homedesktop-core = { path = "../crates/homedesktop-core" }
 
 # Windows 专用依赖：
