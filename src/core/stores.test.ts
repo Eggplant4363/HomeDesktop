@@ -7,6 +7,7 @@ import {
   createFolder,
   currentPage,
   deleteFolder,
+  fitCellsToCols,
   layout,
   moveCellAcrossPages,
   moveIconToFolder,
@@ -244,6 +245,28 @@ describe("stores: 自由摆放（v3）", () => {
     expect(a?.y).toBe(0);
     expect(b?.x).toBe(0);
     expect(b?.y).toBe(0);
+  });
+
+  it("fitCellsToCols 把越界单元移回画布内空位", () => {
+    // 假设按 12 列迁移出 x=10/11 的单元，实际画布只有 8 列
+    setLayout({
+      version: 3,
+      pages: [
+        [
+          { ...icon("a"), x: 0, y: 0 },
+          { ...icon("b"), x: 11, y: 0 }, // 越界（11+1 > 8）
+          { ...icon("c"), x: 10, y: 0 }, // 越界
+        ],
+      ],
+    });
+    expect(fitCellsToCols(0, 8)).toBe(true);
+    const cells = layout.pages[0];
+    for (const cell of cells) {
+      const w = cell.kind === "folder" ? 1 : cell.size.w;
+      expect((cell.x ?? 0) + w).toBeLessThanOrEqual(8);
+    }
+    // 幂等：再次调用无变化
+    expect(fitCellsToCols(0, 8)).toBe(false);
   });
 
   it("setIconPosition 文件夹内定位并交换", () => {

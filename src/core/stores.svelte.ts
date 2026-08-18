@@ -54,6 +54,29 @@ export function addCell(cell: Cell, page = currentPage.index): void {
   cells.push({ ...cloneCell(cell), x: slot.x, y: slot.y });
 }
 
+/** 把超出画布（cols 列）的单元移回画布内空位（仅处理越界单元，不重排正常单元）；返回是否发生调整 */
+export function fitCellsToCols(page: number, cols: number): boolean {
+  const arr = layout.pages[page];
+  if (!arr || cols < 1) return false;
+  const placed: { x: number; y: number; w: number; h: number }[] = [];
+  let changed = false;
+  for (const cell of arr) {
+    const w = cell.kind === "folder" ? 1 : cell.size.w;
+    const h = cell.kind === "folder" ? 1 : cell.size.h;
+    const x = cell.x ?? 0;
+    const y = cell.y ?? 0;
+    if (x + w <= cols) {
+      placed.push({ x, y, w, h });
+      continue;
+    }
+    const slot = findFreeSlot(placed, cols, w, h);
+    cell.x = slot.x;
+    cell.y = slot.y;
+    placed.push({ x: slot.x, y: slot.y, w, h });
+    changed = true;
+  }
+  return changed;
+}
 export function removeCell(id: string, page = currentPage.index): void {
   const arr = layout.pages[page];
   if (!arr) return;

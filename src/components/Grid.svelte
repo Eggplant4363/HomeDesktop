@@ -4,7 +4,7 @@
   import FolderTile from "./FolderTile.svelte";
   import WidgetTile from "./WidgetTile.svelte";
   import type { Cell, IconCell, PluginInfo } from "../core/types";
-  import { enterEditMode, plugins, ui } from "../core/stores.svelte";
+  import { currentPage, enterEditMode, fitCellsToCols, plugins, ui } from "../core/stores.svelte";
   import { appearance } from "../core/appearance.svelte";
   import { filterCells } from "../core/search";
   import { cellRect, findFreeSlot, PAGE_COLS, setActivePageCols } from "../core/layout";
@@ -146,6 +146,14 @@
     const onResize = () => measure();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  });
+
+  // 列数或单元变化时：把超出画布的单元移回画布内空位（只处理越界，不重排）
+  $effect(() => {
+    void cells;
+    if (cols > 0 && cells.length > 0) {
+      fitCellsToCols(currentPage.index, cols);
+    }
   });
 
   function onPointerDown(e: PointerEvent): void {
