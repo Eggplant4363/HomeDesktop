@@ -1,6 +1,6 @@
 [package]
 name = "homedesktop-core"
-version = "0.2.1"
+version = "0.3.0"
 description = "HomeDesktop 纯逻辑核心：插件 manifest、布局、动作分发（无 tauri 依赖，便于单元测试）"
 edition = "2021"
 
