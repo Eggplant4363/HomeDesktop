@@ -1065,7 +1065,7 @@
 
   {#if confirmAction}
     <div
-      class="overlay"
+      class="overlay top"
       role="button"
       aria-label="关闭"
       tabindex="-1"
@@ -1085,7 +1085,7 @@
 
   {#if pendingImportSrc}
     <div
-      class="overlay"
+      class="overlay top"
       role="button"
       aria-label="关闭"
       tabindex="-1"
@@ -1278,9 +1278,13 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    /* App 级弹层（设置/确认框/导入模式等）必须盖过组件级弹层
-       （插件管理 55、搜索 60、插件设置 45、添加菜单 40）——确认框不能出现在后面 */
-    z-index: 100;
+    /* App 级弹层（设置/编辑等）低于组件级弹层（插件管理 55/搜索 60），
+       这样从设置打开的插件管理页能盖在设置之上 */
+    z-index: 30;
+  }
+  /* 必须最前的弹层（卸载确认框、导入模式选择）：盖过一切 */
+  .overlay.top {
+    z-index: 200;
   }
   .move-menu {
     width: 280px;
