@@ -7,7 +7,7 @@
   import { currentPage, enterEditMode, fitCellsToCols, plugins, ui } from "../core/stores.svelte";
   import { appearance } from "../core/appearance.svelte";
   import { filterCells } from "../core/search";
-  import { cellRect, findFreeSlot, PAGE_COLS, setActivePageCols } from "../core/layout";
+  import { PAGE_COLS, setActivePageCols } from "../core/layout";
 
   let {
     cells,
@@ -117,12 +117,6 @@
     return max + PAD + 10;
   });
 
-  /** ＋ 新增按钮位置：页面上首个空位 */
-  const addPos = $derived(
-    queryText === ""
-      ? findFreeSlot(cells.map(cellRect), cols, 1, 1)
-      : null,
-  );
 
   function measure(): void {
     if (!gridEl) return;
@@ -406,13 +400,7 @@
       ></div>
     {/if}
 
-    {#if addPos}
-      <button
-        class="add-tile"
-        style="left:{PAD + addPos.x * SLOT}px;top:{PAD + addPos.y * SLOT}px;width:{tile}px;height:{tile}px;"
-        onclick={() => onaddclick?.()}
-      >＋</button>
-    {/if}
+
   </div>
 </div>
 
@@ -454,18 +442,5 @@
     pointer-events: none;
     z-index: 5;
   }
-  .add-tile {
-    position: absolute;
-    border: 2px dashed var(--bg-elev);
-    border-radius: var(--radius);
-    background: transparent;
-    color: var(--fg-dim);
-    font-size: 28px;
-    cursor: pointer;
-    transition: border-color 0.15s, color 0.15s;
-  }
-  .add-tile:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
+
 </style>

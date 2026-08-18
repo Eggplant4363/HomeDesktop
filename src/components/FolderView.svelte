@@ -13,7 +13,7 @@
   import { filterIcons } from "../core/search";
   import { appearance } from "../core/appearance.svelte";
   import type { IconCell, PluginInfo } from "../core/types";
-  import { cellRect, findFreeSlot, FOLDER_COLS } from "../core/layout";
+  import { FOLDER_COLS } from "../core/layout";
 
   let {
     onaddclick,
@@ -99,11 +99,6 @@
     return max + PAD + 10;
   });
 
-  const addPos = $derived(
-    query.text === ""
-      ? findFreeSlot((folder?.items ?? []).map(cellRect), FOLDER_COLS, 1, 1)
-      : null,
-  );
 
   function measure(): void {
     if (!gridEl) return;
@@ -318,13 +313,7 @@
         ></div>
       {/if}
 
-      {#if addPos}
-        <button
-          class="add-tile"
-          style="left:{PAD + addPos.x * SLOT}px;top:{PAD + addPos.y * SLOT}px;width:{tile}px;height:{tile}px;"
-          onclick={onaddclick}
-        >＋</button>
-      {/if}
+
     </div>
   </div>
 {/if}
@@ -389,18 +378,5 @@
     pointer-events: none;
     z-index: 5;
   }
-  .add-tile {
-    position: absolute;
-    border: 2px dashed var(--bg-elev);
-    border-radius: var(--radius);
-    background: transparent;
-    color: var(--fg-dim);
-    font-size: 28px;
-    cursor: pointer;
-    transition: border-color 0.15s, color 0.15s;
-  }
-  .add-tile:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
+
 </style>
