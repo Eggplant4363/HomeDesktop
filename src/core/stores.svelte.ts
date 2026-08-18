@@ -1,5 +1,6 @@
 // 全局状态（Svelte 5 runes 模块）
 import type { Cell, IconCell, Layout, PluginInfo } from "./types";
+import { log } from "./logger";
 import { activePageCols, cellRect, findFreeSlot, FOLDER_COLS, rectsOverlap } from "./layout";
 
 export const plugins = $state<PluginInfo[]>([]);
@@ -60,6 +61,7 @@ export function fitCellsToCols(page: number, cols: number): boolean {
   if (!arr || cols < 1) return false;
   const placed: { x: number; y: number; w: number; h: number }[] = [];
   let changed = false;
+  let moved = 0;
   for (const cell of arr) {
     const w = cell.kind === "folder" ? 1 : cell.size.w;
     const h = cell.kind === "folder" ? 1 : cell.size.h;
@@ -74,7 +76,9 @@ export function fitCellsToCols(page: number, cols: number): boolean {
     cell.y = slot.y;
     placed.push({ x: slot.x, y: slot.y, w, h });
     changed = true;
+    moved += 1;
   }
+  if (moved > 0) log.info(`画布适配: 第 ${page + 1} 页 ${cols} 列，移回 ${moved} 个越界单元`);
   return changed;
 }
 export function removeCell(id: string, page = currentPage.index): void {
