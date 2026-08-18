@@ -1627,7 +1627,7 @@ dependencies = [
 
 [[package]]
 name = "homedesktop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "homedesktop-core",
@@ -1647,7 +1647,7 @@ dependencies = [
 
 [[package]]
 name = "homedesktop-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "image",
  "serde",
