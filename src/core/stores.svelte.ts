@@ -51,11 +51,13 @@ export function setLayout(next: Layout): void {
 export function addCell(cell: Cell, page = currentPage.index): void {
   if (!layout.pages[page]) layout.pages[page] = [];
   const cells = layout.pages[page];
-  const slot = findFreeSlot(cells.map(cellRect), activePageCols, 1, 1);
+  const w = cell.kind === "folder" ? 1 : cell.size.w;
+  const h = cell.kind === "folder" ? 1 : cell.size.h;
+  const slot = findFreeSlot(cells.map(cellRect), activePageCols, w, h);
   cells.push({ ...cloneCell(cell), x: slot.x, y: slot.y });
 }
 
-/** 把超出画布（cols 列）的单元移回画布内空位（仅处理越界单元，不重排正常单元）；返回是否发生调整 */
+/** 画布适配：把超出画布（cols 列）或与其他单元重叠的单元移到画布内空位（不重排正常单元）；返回是否发生调整 */
 export function fitCellsToCols(page: number, cols: number): boolean {
   const arr = layout.pages[page];
   if (!arr || cols < 1) return false;
@@ -67,8 +69,10 @@ export function fitCellsToCols(page: number, cols: number): boolean {
     const h = cell.kind === "folder" ? 1 : cell.size.h;
     const x = cell.x ?? 0;
     const y = cell.y ?? 0;
-    if (x + w <= cols) {
-      placed.push({ x, y, w, h });
+    const rect = { x, y, w, h };
+    const fits = x + w <= cols && !placed.some((p) => rectsOverlap(rect, p));
+    if (fits) {
+      placed.push(rect);
       continue;
     }
     const slot = findFreeSlot(placed, cols, w, h);
@@ -78,7 +82,7 @@ export function fitCellsToCols(page: number, cols: number): boolean {
     changed = true;
     moved += 1;
   }
-  if (moved > 0) log.info(`画布适配: 第 ${page + 1} 页 ${cols} 列，移回 ${moved} 个越界单元`);
+  if (moved > 0) log.info(`画布适配: 第 ${page + 1} 页 ${cols} 列，调整 ${moved} 个越界/重叠单元`);
   return changed;
 }
 export function removeCell(id: string, page = currentPage.index): void {
@@ -198,7 +202,7 @@ export function deleteFolder(folderId: string): void {
 export function addIconToFolder(folderId: string, icon: IconCell): boolean {
   const found = findFolder(folderId);
   if (!found) return false;
-  const slot = findFreeSlot(found.folder.items.map(cellRect), FOLDER_COLS, 1, 1);
+  const slot = findFreeSlot(found.folder.items.map(cellRect), FOLDER_COLS, icon.size.w, icon.size.h);
   found.folder.items.push({ ...icon, x: slot.x, y: slot.y });
   return true;
 }

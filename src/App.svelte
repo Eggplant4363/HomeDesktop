@@ -1181,6 +1181,7 @@
         ondropinto={handleDropInto}
         onflipprev={handlePrev}
         onflipnext={handleNext}
+        onfitted={() => persist()}
       />
     {/if}
   </section>

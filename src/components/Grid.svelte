@@ -25,6 +25,7 @@
     ondropinto,
     onflipprev,
     onflipnext,
+    onfitted,
   }: {
     cells: Cell[];
     queryText?: string;
@@ -42,6 +43,8 @@
     ondropinto?: (dragId: string, folderId: string) => void;
     onflipprev?: () => void;
     onflipnext?: () => void;
+    /** 画布适配调整了布局后回调（用于持久化） */
+    onfitted?: () => void;
   } = $props();
 
   // ---------- 拖拽（Pointer Events：鼠标移动即拖、触屏长按拾取；仅编辑模式可移动） ----------
@@ -146,7 +149,7 @@
   $effect(() => {
     void cells;
     if (cols > 0 && cells.length > 0) {
-      fitCellsToCols(currentPage.index, cols);
+      if (fitCellsToCols(currentPage.index, cols)) onfitted?.();
     }
   });
 
