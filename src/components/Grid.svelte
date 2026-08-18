@@ -111,7 +111,8 @@
         // 正常模式：快速滑动视为滚动
         clearLongPress();
       }
-    } else if (dist > 4) {
+    } else if (dist > 4 && ui.editMode) {
+      // 仅编辑模式可拖拽移动（非编辑模式点击/滑动不拾取）
       beginDrag(dragCandidate);
     }
   }
