@@ -20,8 +20,10 @@ import {
   reorderCellById,
   reorderIconInFolder,
   replaceCellWithApp,
+  setCellPosition,
   setCellSize,
   setFolderEmoji,
+  setIconPosition,
   setLayout,
   setPlugins,
   updateIconAppearance,
@@ -212,52 +214,69 @@ describe("stores: 尺寸（整数倍）", () => {
   });
 });
 
-describe("stores: 拖拽排序", () => {
-  it("reorderCellById 把 a 移到 b 之前", () => {
-    setLayout({ version: 2, pages: [[icon("a"), icon("b"), icon("c")]] });
-    expect(reorderCellById("a", "b", "before")).toBe(true);
-    expect(layout.pages[0].map((c) => c.id)).toEqual(["a", "b", "c"]);
+describe("stores: 自由摆放（v3）", () => {
+  it("addCell 自动放到首个空位并记录坐标", () => {
+    addCell(icon("a"));
+    addCell(icon("b"));
+    expect(layout.pages[0][0].x).toBe(0);
+    expect(layout.pages[0][0].y).toBe(0);
+    expect(layout.pages[0][1].x).toBe(1);
+    expect(layout.pages[0][1].y).toBe(0);
   });
 
-  it("reorderCellById 把 a 移到 b 之后", () => {
-    setLayout({ version: 2, pages: [[icon("a"), icon("b"), icon("c")]] });
-    reorderCellById("a", "b", "after");
-    expect(layout.pages[0].map((c) => c.id)).toEqual(["b", "a", "c"]);
+  it("setCellPosition 修改坐标", () => {
+    addCell(icon("a"));
+    expect(setCellPosition("a", 3, 2)).toBe(true);
+    expect(layout.pages[0][0].x).toBe(3);
+    expect(layout.pages[0][0].y).toBe(2);
   });
 
-  it("reorderCellById 把 c 移到 a 之前", () => {
-    setLayout({ version: 2, pages: [[icon("a"), icon("b"), icon("c")]] });
-    reorderCellById("c", "a", "before");
-    expect(layout.pages[0].map((c) => c.id)).toEqual(["c", "a", "b"]);
+  it("setCellPosition 目标被占用则交换位置（不自动重排）", () => {
+    setLayout({
+      version: 3,
+      pages: [[{ ...icon("a"), x: 0, y: 0 }, { ...icon("b"), x: 1, y: 0 }]],
+    });
+    setCellPosition("a", 1, 0);
+    const cells = layout.pages[0];
+    const a = cells.find((c) => c.id === "a");
+    const b = cells.find((c) => c.id === "b");
+    expect(a?.x).toBe(1);
+    expect(a?.y).toBe(0);
+    expect(b?.x).toBe(0);
+    expect(b?.y).toBe(0);
   });
 
-  it("reorderCellById 对不存在的 id 返回 false 且不变更", () => {
-    setLayout({ version: 2, pages: [[icon("a"), icon("b")]] });
-    expect(reorderCellById("nope", "a", "before")).toBe(false);
-    expect(layout.pages[0].map((c) => c.id)).toEqual(["a", "b"]);
+  it("setIconPosition 文件夹内定位并交换", () => {
+    const folderId = createFolder("工具");
+    addIconToFolder(folderId, icon("i1"));
+    addIconToFolder(folderId, icon("i2"));
+    expect(setIconPosition(folderId, "i1", 1, 0)).toBe(true);
+    const folder = layout.pages[0].find((c) => c.id === folderId);
+    if (folder?.kind === "folder") {
+      const i1 = folder.items.find((i) => i.id === "i1");
+      const i2 = folder.items.find((i) => i.id === "i2");
+      expect(i1?.x).toBe(1);
+      expect(i2?.x).toBe(0);
+    }
   });
 });
 
 describe("stores: 跨页移动（边缘翻页拖拽）", () => {
-  it("moveCellAcrossPages 把第 1 页的 a 移到第 2 页 b 之前", () => {
-    setLayout({ version: 2, pages: [[icon("a"), icon("b")], [icon("c"), icon("d")]] });
+  it("moveCellAcrossPages 把第 1 页的 a 移到第 2 页指定坐标", () => {
+    setLayout({ version: 3, pages: [[icon("a"), icon("b")], [icon("c"), icon("d")]] });
     currentPage.index = 1; // 拖到第 2 页（当前页）
-    expect(moveCellAcrossPages("a", "c", "before")).toBe(true);
+    expect(moveCellAcrossPages("a", 3, 1)).toBe(true);
     expect(layout.pages[0].map((c) => c.id)).toEqual(["b"]);
-    expect(layout.pages[1].map((c) => c.id)).toEqual(["a", "c", "d"]);
+    expect(layout.pages[1].map((c) => c.id)).toContain("a");
+    const a = layout.pages[1].find((c) => c.id === "a");
+    expect(a?.x).toBe(3);
+    expect(a?.y).toBe(1);
   });
 
-  it("moveCellAcrossPages 同页移动等价于重排", () => {
-    setLayout({ version: 2, pages: [[icon("a"), icon("b"), icon("c")]] });
-    currentPage.index = 0;
-    moveCellAcrossPages("a", "b", "after");
-    expect(layout.pages[0].map((c) => c.id)).toEqual(["b", "a", "c"]);
-  });
-
-  it("moveCellAcrossPages 目标不存在返回 false", () => {
-    setLayout({ version: 2, pages: [[icon("a")], [icon("b")]] });
+  it("moveCellAcrossPages 对不存在的 id 返回 false", () => {
+    setLayout({ version: 3, pages: [[icon("a")], [icon("b")]] });
     currentPage.index = 1;
-    expect(moveCellAcrossPages("a", "zzz", "before")).toBe(false);
+    expect(moveCellAcrossPages("zzz", 0, 0)).toBe(false);
     expect(layout.pages[0]).toHaveLength(1);
   });
 

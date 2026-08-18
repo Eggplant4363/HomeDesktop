@@ -1,10 +1,13 @@
 <script lang="ts">
+  // 主桌面网格（v3 自由摆放）：虚拟画布（PAGE_COLS 列）内绝对定位，拖拽吸附网格、不自动重排
   import IconTile from "./IconTile.svelte";
   import FolderTile from "./FolderTile.svelte";
   import WidgetTile from "./WidgetTile.svelte";
   import type { Cell, IconCell, PluginInfo } from "../core/types";
   import { enterEditMode, plugins, ui } from "../core/stores.svelte";
+  import { appearance } from "../core/appearance.svelte";
   import { filterCells } from "../core/search";
+  import { cellRect, findFreeSlot, PAGE_COLS } from "../core/layout";
 
   let {
     cells,
@@ -18,7 +21,7 @@
     onmoveicon,
     onresize,
     onsettings,
-    onreorder,
+    ondropat,
     ondropinto,
     onflipprev,
     onflipnext,
@@ -34,26 +37,38 @@
     onmoveicon?: (iconId: string) => void;
     onresize?: (iconId: string) => void;
     onsettings?: (cellId: string) => void;
-    onreorder?: (dragId: string, targetId: string, pos: "before" | "after") => void;
+    /** 自由摆放落点：dragId 放到 (x, y) 网格坐标 */
+    ondropat?: (dragId: string, x: number, y: number) => void;
     ondropinto?: (dragId: string, folderId: string) => void;
     onflipprev?: () => void;
     onflipnext?: () => void;
   } = $props();
 
-  // ---------- 拖拽（Pointer Events：鼠标移动即拖、触屏长按拾取） ----------
-  // Tauri/WebView2 中 HTML5 原生 DnD 不可靠且触屏不支持，故自行实现。
+  // ---------- 拖拽（Pointer Events：鼠标移动即拖、触屏长按拾取；仅编辑模式可移动） ----------
 
   let gridEl: HTMLElement | undefined;
+  let canvasEl: HTMLElement | undefined;
+
+  /** CSS 变量（--tile-size / --gap），挂载与窗口变化时读取 */
+  let tile = $state(84);
+  let gap = $state(16);
+  const PAD = 6;
+  const SLOT = $derived(tile + gap);
+
   let dragging = false;
   let draggingId = $state<string | null>(null);
-  let overId = $state<string | null>(null);
-  let overPos = $state<"before" | "after" | "into">("before");
+  let dragSlot = $state<{ x: number; y: number; w: number; h: number } | null>(null);
+  let overFolderId = $state<string | null>(null);
+  let dragDx = $state(0);
+  let dragDy = $state(0);
   let suppressClick = false;
 
   let pointerId: number | null = null;
   let dragCandidate: string | null = null;
   let startX = 0;
   let startY = 0;
+  let dragStartPointerX = 0;
+  let dragStartPointerY = 0;
   let longPressTimer: ReturnType<typeof setTimeout> | undefined;
   let edgeTimer: ReturnType<typeof setTimeout> | undefined;
   let lastFlip = 0;
@@ -72,14 +87,61 @@
 
   const visible = $derived(filterCells(cells, plugins, queryText));
 
-  // ---------- 事件 ----------
+  /** 单元像素几何（画布内） */
+  function pxX(cell: Cell): number {
+    return PAD + (cell.x ?? 0) * SLOT;
+  }
+  function pxY(cell: Cell): number {
+    return PAD + (cell.y ?? 0) * SLOT;
+  }
+  function pxW(cell: Cell): number {
+    const w = cell.kind === "folder" ? 1 : cell.size.w;
+    return w * tile + (w - 1) * gap;
+  }
+  function pxH(cell: Cell): number {
+    const h = cell.kind === "folder" ? 1 : cell.size.h;
+    return h * tile + (h - 1) * gap;
+  }
+
+  const canvasW = $derived(PAGE_COLS * tile + (PAGE_COLS - 1) * gap + PAD * 2);
+  const canvasH = $derived.by(() => {
+    let max = 0;
+    for (const cell of cells) {
+      if (cell.id === draggingId) continue;
+      const bottom = (cell.y ?? 0) + (cell.kind === "folder" ? 1 : cell.size.h);
+      max = Math.max(max, bottom * SLOT);
+    }
+    return max + PAD + 10;
+  });
+
+  /** ＋ 新增按钮位置：页面上首个空位 */
+  const addPos = $derived(
+    queryText === ""
+      ? findFreeSlot(cells.map(cellRect), PAGE_COLS, 1, 1)
+      : null,
+  );
+
+  function measure(): void {
+    if (!gridEl) return;
+    const style = getComputedStyle(gridEl);
+    const t = parseFloat(style.getPropertyValue("--tile-size"));
+    const g = parseFloat(style.getPropertyValue("--gap"));
+    if (Number.isFinite(t) && t > 0) tile = t;
+    if (Number.isFinite(g) && g >= 0) gap = g;
+  }
+
+  // 首次挂载与图标大小变化时重新度量（tile/gap 用于画布尺寸与拖拽吸附计算）
+  $effect(() => {
+    void appearance.tileSize;
+    measure();
+  });
 
   function onPointerDown(e: PointerEvent): void {
     if ((e.target as HTMLElement).closest("button")) return; // 忽略操作按钮
-    const tile = (e.target as HTMLElement).closest<HTMLElement>("[data-cell-id]");
-    if (!tile) return;
+    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-cell-id]");
+    if (!el) return;
     pointerId = e.pointerId;
-    dragCandidate = tile.dataset.cellId ?? null;
+    dragCandidate = el.dataset.cellId ?? null;
     startX = e.clientX;
     startY = e.clientY;
     if (e.pointerType === "touch" && dragCandidate) {
@@ -94,7 +156,9 @@
   function onPointerMove(e: PointerEvent): void {
     if (dragging) {
       e.preventDefault();
-      updateOver(e.clientX, e.clientY);
+      dragDx = e.clientX - dragStartPointerX;
+      dragDy = e.clientY - dragStartPointerY;
+      updateTarget(e.clientX, e.clientY);
       edgeFlip(e.clientX);
       return;
     }
@@ -102,13 +166,11 @@
     const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
     if (e.pointerType === "touch") {
       if (ui.editMode) {
-        // 编辑模式下：小幅移动即拾取拖拽
         if (dist > 6) {
           clearLongPress();
           beginDrag(dragCandidate);
         }
       } else if (dist > 14) {
-        // 正常模式：快速滑动视为滚动
         clearLongPress();
       }
     } else if (dist > 4 && ui.editMode) {
@@ -121,13 +183,10 @@
     clearLongPress();
     if (!dragging) return;
     e.preventDefault();
-    if (overId && overId !== draggingId) {
-      const target = cellById(overId);
-      if (target?.kind === "folder") {
-        ondropinto?.(draggingId!, overId);
-      } else {
-        onreorder?.(draggingId!, overId, overPos === "after" ? "after" : "before");
-      }
+    if (overFolderId && overFolderId !== draggingId) {
+      ondropinto?.(draggingId!, overFolderId);
+    } else if (dragSlot && dragSlot.x >= 0) {
+      ondropat?.(draggingId!, dragSlot.x, dragSlot.y);
     }
     suppressClick = true;
     endDrag();
@@ -150,7 +209,13 @@
     if (dragging) return;
     dragging = true;
     draggingId = id;
-    overId = null;
+    const cell = cellById(id);
+    const w = cell?.kind === "folder" ? 1 : cell?.size.w ?? 1;
+    const h = cell?.kind === "folder" ? 1 : cell?.size.h ?? 1;
+    dragSlot = { x: cell?.x ?? 0, y: cell?.y ?? 0, w, h };
+    overFolderId = null;
+    dragStartPointerX = startX;
+    dragStartPointerY = startY;
     const pid = pointerId;
     if (gridEl && pid !== null) {
       try {
@@ -164,7 +229,10 @@
   function endDrag(): void {
     dragging = false;
     draggingId = null;
-    overId = null;
+    dragSlot = null;
+    overFolderId = null;
+    dragDx = 0;
+    dragDy = 0;
     dragCandidate = null;
     const pid = pointerId;
     pointerId = null;
@@ -178,101 +246,28 @@
     clearEdgeTimer();
   }
 
-  // ---------- 网格度量与槽位计算 ----------
-  // 支持拖到空行/行尾空白/页面边缘：不依赖悬停在已有图标上
-
-  interface SlotMetrics {
-    cols: number;
-    tile: number;
-    gap: number;
-    left: number;
-    top: number;
-  }
-
-  function computeGridMetrics(): SlotMetrics {
-    const rect = gridEl?.getBoundingClientRect();
-    const style = gridEl ? getComputedStyle(gridEl) : null;
-    const tile = style ? parseFloat(style.getPropertyValue("--tile-size")) || 84 : 84;
-    const gap = style ? parseFloat(style.getPropertyValue("--gap")) || 16 : 16;
-    const padL = style ? parseFloat(style.paddingLeft) || 0 : 0;
-    const padR = style ? parseFloat(style.paddingRight) || 0 : 0;
-    const padT = style ? parseFloat(style.paddingTop) || 0 : 0;
-    const width = rect ? rect.width - padL - padR : 1;
-    const cols = Math.max(1, Math.floor((width + gap) / (tile + gap)));
-    const contentW = cols * tile + (cols - 1) * gap;
-    const left = rect ? rect.left + (rect.width - contentW) / 2 : 0;
-    const top = rect ? rect.top + padT : 0;
-    return { cols, tile, gap, left, top };
-  }
-
-  /** 模拟网格排布（跳过拖动中的单元），返回各单元的行列位置 */
-  function placeCells(cols: number): { id: string; row: number; col: number }[] {
-    const placements: { id: string; row: number; col: number }[] = [];
-    const occupied = new Set<string>();
-    let row = 0;
-    let col = 0;
-    for (const cell of cells) {
-      if (cell.id === draggingId) continue;
-      // 文件夹视为 1×1
-      const w = cell.kind === "folder" ? 1 : cell.size.w;
-      const h = cell.kind === "folder" ? 1 : cell.size.h;
-      while (occupied.has(`${row},${col}`)) {
-        col += 1;
-        if (col >= cols) {
-          row += 1;
-          col = 0;
-        }
-      }
-      placements.push({ id: cell.id, row, col });
-      for (let r = 0; r < h; r++) {
-        for (let c = 0; c < w; c++) {
-          if (col + c < cols) occupied.add(`${row + r},${col + c}`);
-        }
-      }
-      col += w;
-      if (col >= cols) {
-        row += 1;
-        col = 0;
-      }
-    }
-    return placements;
-  }
-
-  function updateOver(x: number, y: number): void {
-    // 1) 直接悬停在已有单元上：按水平位置精确判断 前/后/入文件夹
+  /** 计算落点（吸附网格）与文件夹拖入目标 */
+  function updateTarget(x: number, y: number): void {
+    if (!canvasEl || !draggingId) return;
+    const cell = cellById(draggingId);
+    const w = cell?.kind === "folder" ? 1 : cell?.size.w ?? 1;
+    const h = cell?.kind === "folder" ? 1 : cell?.size.h ?? 1;
+    const rect = canvasEl.getBoundingClientRect();
+    const slot = SLOT;
+    const tx = Math.round((x - rect.left - PAD - (w * slot) / 2) / slot);
+    const ty = Math.round((y - rect.top - PAD - (h * slot) / 2) / slot);
+    dragSlot = {
+      x: Math.max(0, Math.min(PAGE_COLS - w, tx)),
+      y: Math.max(0, ty),
+      w,
+      h,
+    };
+    // 悬停在文件夹上 → 拖入文件夹
     const el = document.elementFromPoint(x, y);
-    const tile = (el as HTMLElement | null)?.closest?.<HTMLElement>("[data-cell-id]");
-    const targetId = tile?.dataset.cellId ?? null;
-    if (targetId && targetId !== draggingId) {
-      const target = cellById(targetId);
-      if (target?.kind === "folder") {
-        overId = targetId;
-        overPos = "into";
-      } else {
-        const rect = tile!.getBoundingClientRect();
-        overId = targetId;
-        overPos = x < rect.left + rect.width / 2 ? "before" : "after";
-      }
-      return;
-    }
-
-    // 2) 空白/边缘：槽位计算 → 插入到该槽位之后第一个单元之前；没有则追加到末尾
-    const m = computeGridMetrics();
-    const scol = Math.min(Math.max(Math.floor((x - m.left) / (m.tile + m.gap)), 0), m.cols - 1);
-    const srow = Math.max(Math.floor((y - m.top) / (m.tile + m.gap)), 0);
-    const placements = placeCells(m.cols);
-    const hit = placements.find(
-      (p) => p.row > srow || (p.row === srow && p.col >= scol),
-    );
-    if (hit) {
-      overId = hit.id;
-      overPos = "before";
-    } else if (placements.length > 0) {
-      overId = placements[placements.length - 1].id;
-      overPos = "after";
-    } else {
-      overId = null;
-    }
+    const tileEl = (el as HTMLElement | null)?.closest?.<HTMLElement>("[data-cell-id]");
+    const tid = tileEl?.dataset.cellId ?? null;
+    overFolderId =
+      tid && tid !== draggingId && cellById(tid)?.kind === "folder" ? tid : null;
   }
 
   function edgeFlip(x: number): void {
@@ -312,7 +307,6 @@
   class="grid"
   role="grid"
   tabindex="-1"
-  class:searching={queryText !== ""}
   bind:this={gridEl}
   onpointerdown={onPointerDown}
   onpointermove={onPointerMove}
@@ -323,118 +317,125 @@
     if (e.key === "Escape") endDrag();
   }}
 >
-  {#each visible as cell (cell.id)}
-    {@const isOver = overId === cell.id}
-    {@const isDragging = draggingId === cell.id}
-    {#if cell.kind === "folder"}
-      <div
-        class="drop-wrap"
-        class:over={isOver}
-        class:into={isOver && overPos === "into"}
-        class:dragging={isDragging}
-      >
-        <FolderTile
-          folder={cell}
-          editMode={ui.editMode}
-          onopen={() => !ui.editMode && onopenfolder?.(cell.id)}
-          onedit={() => oneditfolder?.(cell.id)}
-          ondelete={() => ondelete?.(cell.id)}
-        />
-      </div>
-    {:else if isWidgetCell(cell)}
-      <div
-        class="drop-wrap"
-        class:over={isOver}
-        class:before={isOver && overPos === "before"}
-        class:after={isOver && overPos === "after"}
-        class:dragging={isDragging}
-        style="grid-column: span {cell.size.w}; grid-row: span {cell.size.h};"
-      >
-        <WidgetTile item={cell} editMode={ui.editMode} ondelete={() => ondelete?.(cell.id)} onmove={() => onmoveicon?.(cell.id)} onresize={() => onresize?.(cell.id)} onsettings={() => onsettings?.(cell.id)} />
-      </div>
-    {:else}
-      <div
-        class="drop-wrap"
-        class:over={isOver}
-        class:before={isOver && overPos === "before"}
-        class:after={isOver && overPos === "after"}
-        class:dragging={isDragging}
-        style="grid-column: span {cell.size.w}; grid-row: span {cell.size.h};"
-      >
-        <IconTile
-          item={cell}
-          plugin={pluginOf(cell)}
-          editMode={ui.editMode}
-          onlaunch={() => !ui.editMode && onlaunch?.(cell.id)}
-          ondelete={() => ondelete?.(cell.id)}
-          onmove={() => onmoveicon?.(cell.id)}
-          onedit={() => onediticon?.(cell.id)}
-          onresize={() => onresize?.(cell.id)}
-          onsettings={() => onsettings?.(cell.id)}
-        />
-      </div>
-    {/if}
-  {/each}
+  <div
+    class="canvas"
+    bind:this={canvasEl}
+    style="width:{canvasW}px;height:{canvasH}px;"
+  >
+    {#each visible as cell (cell.id)}
+      {@const isDragging = draggingId === cell.id}
+      {@const isFolderOver = overFolderId === cell.id}
+      {#if cell.kind === "folder"}
+        <div
+          class="drop-wrap"
+          class:dragging={isDragging}
+          class:folder-over={isFolderOver}
+          data-cell-id={cell.id}
+          style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
+        >
+          <FolderTile
+            folder={cell}
+            editMode={ui.editMode}
+            onopen={() => !ui.editMode && onopenfolder?.(cell.id)}
+            onedit={() => oneditfolder?.(cell.id)}
+            ondelete={() => ondelete?.(cell.id)}
+          />
+        </div>
+      {:else if isWidgetCell(cell)}
+        <div
+          class="drop-wrap"
+          class:dragging={isDragging}
+          data-cell-id={cell.id}
+          style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
+        >
+          <WidgetTile
+            item={cell}
+            editMode={ui.editMode}
+            ondelete={() => ondelete?.(cell.id)}
+            onmove={() => onmoveicon?.(cell.id)}
+            onresize={() => onresize?.(cell.id)}
+            onsettings={() => onsettings?.(cell.id)}
+          />
+        </div>
+      {:else}
+        <div
+          class="drop-wrap"
+          class:dragging={isDragging}
+          data-cell-id={cell.id}
+          style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
+        >
+          <IconTile
+            item={cell}
+            plugin={pluginOf(cell)}
+            editMode={ui.editMode}
+            onlaunch={() => !ui.editMode && onlaunch?.(cell.id)}
+            ondelete={() => ondelete?.(cell.id)}
+            onmove={() => onmoveicon?.(cell.id)}
+            onedit={() => onediticon?.(cell.id)}
+            onresize={() => onresize?.(cell.id)}
+            onsettings={() => onsettings?.(cell.id)}
+          />
+        </div>
+      {/if}
+    {/each}
 
-  {#if queryText === ""}
-    <button class="add-tile" onclick={() => onaddclick?.()}>＋</button>
-  {/if}
+    {#if dragSlot && !overFolderId}
+      <div
+        class="slot-ghost"
+        style="left:{PAD + dragSlot.x * SLOT}px;top:{PAD + dragSlot.y * SLOT}px;width:{dragSlot.w * tile + (dragSlot.w - 1) * gap}px;height:{dragSlot.h * tile + (dragSlot.h - 1) * gap}px;"
+      ></div>
+    {/if}
+
+    {#if addPos}
+      <button
+        class="add-tile"
+        style="left:{PAD + addPos.x * SLOT}px;top:{PAD + addPos.y * SLOT}px;width:{tile}px;height:{tile}px;"
+        onclick={() => onaddclick?.()}
+      >＋</button>
+    {/if}
+  </div>
 </div>
 
 <style>
   .grid {
-    display: grid;
-    /* 固定基准粒度：每列恰为 --tile-size，跨 N 列 = N×基准 + (N-1)×gap，严格整数倍 */
-    grid-template-columns: repeat(auto-fill, var(--tile-size));
-    grid-auto-rows: var(--tile-size);
-    justify-content: center;
-    gap: var(--gap);
-    align-content: start;
+    position: relative;
     height: 100%;
     overflow-y: auto;
-    padding: 4px;
+    overflow-x: hidden;
     touch-action: pan-y; /* 触屏：纵向滚动交给浏览器，长按/横向由应用处理 */
-    /* 容器 tabindex=-1 可被点击聚焦；按键后 Chromium 会画默认黑色 focus ring（包住整个图标区）→ 禁用 */
+    /* 容器 tabindex=-1 可被点击聚焦；按键后 Chromium 会画默认黑色 focus ring → 禁用 */
     outline: none;
   }
   .grid:focus,
   .grid:focus-visible {
     outline: none;
   }
-  .grid.searching {
-    align-content: start;
+  .canvas {
+    position: relative;
+    margin: 0 auto;
   }
   .drop-wrap {
-    position: relative;
+    position: absolute;
     touch-action: pan-y;
   }
   .drop-wrap.dragging {
-    opacity: 0.4;
+    transition: none;
   }
-  .drop-wrap.into {
-    outline: 2px dashed var(--accent);
-    outline-offset: 3px;
+  .drop-wrap.folder-over {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
     border-radius: var(--radius);
   }
-  .drop-wrap.before::before,
-  .drop-wrap.after::after {
-    content: "";
+  .slot-ghost {
     position: absolute;
-    top: 8%;
-    bottom: 8%;
-    width: 4px;
-    border-radius: 2px;
-    background: var(--accent);
-    z-index: 3;
-  }
-  .drop-wrap.before::before {
-    left: -8px;
-  }
-  .drop-wrap.after::after {
-    right: -8px;
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    pointer-events: none;
+    z-index: 5;
   }
   .add-tile {
-    height: var(--tile-size);
+    position: absolute;
     border: 2px dashed var(--bg-elev);
     border-radius: var(--radius);
     background: transparent;

@@ -172,6 +172,11 @@ pub struct IconItem {
     pub color: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon_path: Option<String>,
+    /// 自由摆放（v3）：文件夹内网格坐标（缺省由迁移分配）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub y: Option<u16>,
 }
 
 /// 网格单元格（tagged enum：kind 字段区分）
@@ -194,6 +199,11 @@ pub enum Cell {
         color: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         icon_path: Option<String>,
+        /// 自由摆放（v3）：页面网格坐标（缺省由迁移分配）
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        x: Option<u16>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        y: Option<u16>,
     },
     #[serde(rename_all = "camelCase")]
     Folder {
@@ -201,6 +211,11 @@ pub enum Cell {
         name: String,
         emoji: String,
         items: Vec<IconItem>,
+        /// 自由摆放（v3）：页面网格坐标（缺省由迁移分配；文件夹占 1×1）
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        x: Option<u16>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        y: Option<u16>,
     },
 }
 
@@ -222,27 +237,129 @@ pub struct Layout {
 }
 
 fn default_layout_version() -> u32 {
-    2
+    3
 }
 
-/// v1 → v2 迁移：v1 的图标项没有 `kind` 字段，补上 `kind:"icon"`；版本号升到 2。
-/// 幂等：对任意输入执行都是安全的。
-pub fn migrate_layout(value: &mut serde_json::Value) {
-    if let Some(pages) = value.get_mut("pages").and_then(|p| p.as_array_mut()) {
-        for page in pages {
-            if let Some(cells) = page.as_array_mut() {
-                for cell in cells {
-                    if let Some(obj) = cell.as_object_mut() {
-                        if !obj.contains_key("kind") {
-                            obj.insert("kind".into(), serde_json::json!("icon"));
+/// 自由摆放（v3）：主页面虚拟列数 / 文件夹内虚拟列数 / 最大行数
+pub const PAGE_COLS: u16 = 12;
+pub const FOLDER_COLS: u16 = 6;
+const MAX_ROWS: u16 = 500;
+
+fn rects_overlap(a: (u16, u16, u16, u16), b: (u16, u16, u16, u16)) -> bool {
+    let (ax, ay, aw, ah) = a;
+    let (bx, by, bw, bh) = b;
+    ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah
+}
+
+/// 在 occupied 矩形集中找 w×h 的首个空位（行优先扫描；x+w 超出列宽则换行）
+fn find_free_slot(
+    occupied: &[(u16, u16, u16, u16)],
+    cols: u16,
+    w: u16,
+    h: u16,
+) -> Option<(u16, u16)> {
+    for y in 0..MAX_ROWS {
+        for x in 0..cols {
+            if x + w > cols {
+                continue;
+            }
+            let rect = (x, y, w, h);
+            if !occupied.iter().any(|o| rects_overlap(rect, *o)) {
+                return Some((x, y));
+            }
+        }
+    }
+    None
+}
+
+fn cell_size_from_json(obj: &serde_json::Map<String, serde_json::Value>) -> (u16, u16) {
+    let size = obj.get("size");
+    let w = size
+        .and_then(|s| s.get("w"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1)
+        .max(1) as u16;
+    let h = size
+        .and_then(|s| s.get("h"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1)
+        .max(1) as u16;
+    (w, h)
+}
+
+/// 给缺 x/y 的单元分配坐标（cols 列虚拟网格，行优先找空位）；幂等
+fn assign_positions(cells: &mut [serde_json::Value], cols: u16) {
+    let mut occupied: Vec<(u16, u16, u16, u16)> = Vec::new();
+    for cell in cells {
+        let Some(obj) = cell.as_object_mut() else {
+            continue;
+        };
+        let (w, h) = cell_size_from_json(obj);
+        match (
+            obj.get("x").and_then(|v| v.as_u64()),
+            obj.get("y").and_then(|v| v.as_u64()),
+        ) {
+            (Some(x), Some(y)) => {
+                occupied.push((x as u16, y as u16, w, h));
+            }
+            _ => {
+                if let Some((x, y)) = find_free_slot(&occupied, cols, w, h) {
+                    obj.insert("x".into(), serde_json::json!(x));
+                    obj.insert("y".into(), serde_json::json!(y));
+                    occupied.push((x, y, w, h));
+                }
+            }
+        }
+        // 文件夹内部图标同样分配坐标（FOLDER_COLS 列）
+        if let Some(items) = obj.get_mut("items").and_then(|i| i.as_array_mut()) {
+            let mut focc: Vec<(u16, u16, u16, u16)> = Vec::new();
+            for item in items {
+                let Some(iobj) = item.as_object_mut() else {
+                    continue;
+                };
+                let (iw, ih) = cell_size_from_json(iobj);
+                match (
+                    iobj.get("x").and_then(|v| v.as_u64()),
+                    iobj.get("y").and_then(|v| v.as_u64()),
+                ) {
+                    (Some(x), Some(y)) => {
+                        focc.push((x as u16, y as u16, iw, ih));
+                    }
+                    _ => {
+                        if let Some((x, y)) = find_free_slot(&focc, FOLDER_COLS, iw, ih) {
+                            iobj.insert("x".into(), serde_json::json!(x));
+                            iobj.insert("y".into(), serde_json::json!(y));
+                            focc.push((x, y, iw, ih));
                         }
                     }
                 }
             }
         }
     }
-    if value.get("version").and_then(|x| x.as_u64()).unwrap_or(0) < 2 {
-        value["version"] = serde_json::json!(2);
+}
+
+/// v1 → v2 → v3 迁移：v1 图标项无 `kind`（补 `kind:"icon"`）；v3 起为自由摆放，
+/// 给缺 `x`/`y` 的单元分配虚拟网格坐标。幂等：对任意输入执行都是安全的。
+pub fn migrate_layout(value: &mut serde_json::Value) {
+    if let Some(pages) = value.get_mut("pages").and_then(|p| p.as_array_mut()) {
+        for page in pages {
+            if let Some(cells) = page.as_array_mut() {
+                // v1 → v2：kind 补全
+                for cell in cells.iter_mut() {
+                    if let Some(obj) = cell.as_object_mut() {
+                        if !obj.contains_key("kind") {
+                            obj.insert("kind".into(), serde_json::json!("icon"));
+                        }
+                    }
+                }
+                // v2 → v3：自由摆放坐标
+                assign_positions(cells, PAGE_COLS);
+            }
+        }
+    }
+    let version = value.get("version").and_then(|x| x.as_u64()).unwrap_or(0);
+    if version < 3 {
+        value["version"] = serde_json::json!(3);
     }
 }
 
@@ -634,7 +751,7 @@ mod tests {
         let dir = temp_dir("layout");
         let path = dir.join("layout.json");
         let layout = Layout {
-            version: 2,
+            version: 3,
             pages: vec![vec![
                 Cell::Icon {
                     id: "item-1".into(),
@@ -645,6 +762,8 @@ mod tests {
                     emoji: None,
                     color: None,
                     icon_path: None,
+                    x: Some(0),
+                    y: Some(0),
                 },
                 Cell::Folder {
                     id: "folder-1".into(),
@@ -659,7 +778,11 @@ mod tests {
                         emoji: None,
                         color: None,
                         icon_path: None,
+                        x: Some(0),
+                        y: Some(0),
                     }],
+                    x: Some(1),
+                    y: Some(0),
                 },
             ]],
         };
@@ -670,7 +793,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_v1_auto_migrates_to_v2() {
+    fn layout_v1_auto_migrates_to_v3() {
         // v1 布局：图标项没有 kind 字段、无 version
         let v1 = r#"{
             "pages": [[
@@ -679,12 +802,15 @@ mod tests {
         }"#;
         let mut value: serde_json::Value = serde_json::from_str(v1).unwrap();
         migrate_layout(&mut value);
-        assert_eq!(value["version"], 2);
+        assert_eq!(value["version"], 3);
         assert_eq!(value["pages"][0][0]["kind"], "icon");
+        // v3：自动分配自由摆放坐标
+        assert_eq!(value["pages"][0][0]["x"], 0);
+        assert_eq!(value["pages"][0][0]["y"], 0);
 
-        // 迁移后能正常反序列化为 Layout v2
+        // 迁移后能正常反序列化为 Layout v3
         let layout: Layout = serde_json::from_value(value).unwrap();
-        assert_eq!(layout.version, 2);
+        assert_eq!(layout.version, 3);
         match &layout.pages[0][0] {
             Cell::Icon { id, .. } => assert_eq!(id, "a"),
             _ => panic!("应为图标单元"),
@@ -692,15 +818,50 @@ mod tests {
     }
 
     #[test]
-    fn migrate_layout_is_idempotent() {
+    fn migrate_layout_is_idempotent_and_assigns_positions() {
+        // v2：已有 kind、无坐标；两个 1×1 图标 + 一个 2×1 小组件
         let v2 = r#"{
             "version": 2,
-            "pages": [[{ "kind": "icon", "id": "a", "pluginId": "p1", "title": "A", "size": { "w": 1, "h": 1 } }]]
+            "pages": [[
+                { "kind": "icon", "id": "a", "pluginId": "p1", "title": "A", "size": { "w": 1, "h": 1 } },
+                { "kind": "icon", "id": "b", "pluginId": "p1", "title": "B", "size": { "w": 2, "h": 1 } }
+            ]]
         }"#;
         let mut value: serde_json::Value = serde_json::from_str(v2).unwrap();
         migrate_layout(&mut value);
-        assert_eq!(value["version"], 2);
+        assert_eq!(value["version"], 3);
         assert_eq!(value["pages"][0][0]["kind"], "icon");
+        // a 占 (0,0) 1×1；b 为 2×1 → 起点 (1,0)（a 后一个槽）
+        assert_eq!(value["pages"][0][0]["x"], 0);
+        assert_eq!(value["pages"][0][0]["y"], 0);
+        assert_eq!(value["pages"][0][1]["x"], 1);
+        assert_eq!(value["pages"][0][1]["y"], 0);
+        // 幂等：再跑一次结果不变
+        let snapshot = value.clone();
+        migrate_layout(&mut value);
+        assert_eq!(value, snapshot, "幂等");
+    }
+
+    #[test]
+    fn migrate_assigns_folder_item_positions() {
+        let v2 = r#"{
+            "version": 2,
+            "pages": [[
+                { "kind": "folder", "id": "f", "name": "F", "emoji": "📁", "items": [
+                    { "id": "i1", "pluginId": "p", "title": "1", "size": { "w": 1, "h": 1 } },
+                    { "id": "i2", "pluginId": "p", "title": "2", "size": { "w": 1, "h": 1 } }
+                ] }
+            ]]
+        }"#;
+        let mut value: serde_json::Value = serde_json::from_str(v2).unwrap();
+        migrate_layout(&mut value);
+        assert_eq!(value["pages"][0][0]["x"], 0);
+        assert_eq!(value["pages"][0][0]["y"], 0);
+        // 文件夹内图标按 FOLDER_COLS(6) 列分配
+        assert_eq!(value["pages"][0][0]["items"][0]["x"], 0);
+        assert_eq!(value["pages"][0][0]["items"][0]["y"], 0);
+        assert_eq!(value["pages"][0][0]["items"][1]["x"], 1);
+        assert_eq!(value["pages"][0][0]["items"][1]["y"], 0);
     }
 
     #[test]
@@ -714,6 +875,8 @@ mod tests {
             emoji: None,
             color: None,
             icon_path: None,
+                    x: None,
+                    y: None,
         };
         let json = serde_json::to_value(&cell).unwrap();
         assert_eq!(json["kind"], "icon");
@@ -733,6 +896,8 @@ mod tests {
             emoji: None,
             color: None,
             icon_path: None,
+                    x: None,
+                    y: None,
         };
         let json = serde_json::to_value(&with_action).unwrap();
         assert_eq!(json["action"]["kind"], "app");
@@ -748,6 +913,8 @@ mod tests {
             emoji: Some("🎮".into()),
             color: Some("#e53935".into()),
             icon_path: Some("C:\\game.exe".into()),
+            x: None,
+            y: None,
         };
         let json = serde_json::to_value(&custom).unwrap();
         assert_eq!(json["emoji"], "🎮");
@@ -761,6 +928,8 @@ mod tests {
             name: "F".into(),
             emoji: "📁".into(),
             items: vec![],
+            x: None,
+            y: None,
         };
         let json = serde_json::to_value(&folder).unwrap();
         assert_eq!(json["kind"], "folder");

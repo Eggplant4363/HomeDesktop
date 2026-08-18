@@ -1,3 +1,12 @@
+## 2026-02-13（自由摆放：主页面 + 文件夹内）⏳ 待验收
+
+- **需求**（用户提出）：支持自由摆放，主页面与文件夹内部都可；吸附网格、不自动重排
+- **实现**：
+  - 布局 schema **v2 → v3**：Cell/IconItem 增加 x/y（网格坐标，serde 缺省）；core 迁移 v1→v3 幂等（旧布局按 PAGE_COLS=12 / FOLDER_COLS=6 虚拟网格分配坐标）
+  - 渲染：主页面（Grid）与文件夹（FolderView）改为**虚拟画布 + 绝对定位**（不再 CSS grid 流式排布）；画布宽度固定 12/6 列，高度随内容；＋ 按钮自动放在首个空位
+  - 拖拽：编辑模式拖动 → 单元跟随指针 → 落点**吸附网格**（虚线幽灵框预览）→ 目标槽被占用**交换位置**；悬停文件夹可拖入；边缘翻页跨页移动带坐标
+  - stores：setCellPosition / setIconPosition（占用即交换）、addCell / addIconToFolder / moveIconToFolder 自动找空位、moveCellAcrossPages 改为 (id, x, y)
+- **验证**：core 22/22、vitest 82/82、svelte-check 0 错误 0 警告
 ## 2026-02-13（发布 v0.2.1：小版本更新）✅
 
 - **内容**（自 v0.2.0）：网络代理设置、在线市场索引 SHA 固定、移动图标仅限编辑模式、图标区黑框修复

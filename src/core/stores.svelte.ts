@@ -1,8 +1,9 @@
 // 全局状态（Svelte 5 runes 模块）
 import type { Cell, IconCell, Layout, PluginInfo } from "./types";
+import { cellRect, findFreeSlot, FOLDER_COLS, PAGE_COLS, rectsOverlap } from "./layout";
 
 export const plugins = $state<PluginInfo[]>([]);
-export const layout = $state<Layout>({ version: 2, pages: [[]] });
+export const layout = $state<Layout>({ version: 3, pages: [[]] });
 export const query = $state({ text: "" });
 export const currentPage = $state({ index: 0 });
 /** 当前打开的文件夹（null = 主网格视图） */
@@ -45,9 +46,12 @@ export function setLayout(next: Layout): void {
 
 // ---------- 单元格操作 ----------
 
+/** 在页面空闲处放置新单元（自由摆放：自动找首个空位） */
 export function addCell(cell: Cell, page = currentPage.index): void {
   if (!layout.pages[page]) layout.pages[page] = [];
-  layout.pages[page].push(cloneCell(cell));
+  const cells = layout.pages[page];
+  const slot = findFreeSlot(cells.map(cellRect), PAGE_COLS, 1, 1);
+  cells.push({ ...cloneCell(cell), x: slot.x, y: slot.y });
 }
 
 export function removeCell(id: string, page = currentPage.index): void {
@@ -55,6 +59,80 @@ export function removeCell(id: string, page = currentPage.index): void {
   if (!arr) return;
   const i = arr.findIndex((c) => c.id === id);
   if (i >= 0) arr.splice(i, 1);
+}
+
+/** 设置单元位置（自由摆放 v3）：目标槽被占用则与占用单元交换位置；单元在别的页则移动到目标页 */
+export function setCellPosition(
+  cellId: string,
+  x: number,
+  y: number,
+  page = currentPage.index,
+): boolean {
+  const targetArr = layout.pages[page];
+  if (!targetArr) return false;
+  const sx = Math.max(0, Math.min(PAGE_COLS - 1, Math.round(x)));
+  const sy = Math.max(0, Math.round(y));
+
+  let fromPage = -1;
+  let fromIndex = -1;
+  for (let p = 0; p < layout.pages.length; p++) {
+    const i = layout.pages[p].findIndex((c) => c.id === cellId);
+    if (i >= 0) {
+      fromPage = p;
+      fromIndex = i;
+      break;
+    }
+  }
+  if (fromPage < 0) return false;
+
+  const moving = layout.pages[fromPage][fromIndex];
+  const movingW = moving.kind === "icon" ? moving.size.w : 1;
+  const movingH = moving.kind === "icon" ? moving.size.h : 1;
+  const movingRect = { x: sx, y: sy, w: movingW, h: movingH };
+
+  // 目标槽与其他单元重叠 → 交换位置（不自动重排）
+  const other = targetArr.find((c) => c.id !== cellId && rectsOverlap(movingRect, cellRect(c)));
+  if (other) {
+    const otherX = other.x ?? 0;
+    const otherY = other.y ?? 0;
+    other.x = moving.x ?? 0;
+    other.y = moving.y ?? 0;
+    moving.x = otherX;
+    moving.y = otherY;
+  } else {
+    moving.x = sx;
+    moving.y = sy;
+  }
+  if (fromPage !== page) {
+    const [cell] = layout.pages[fromPage].splice(fromIndex, 1);
+    targetArr.push(cell);
+  }
+  return true;
+}
+
+/** 设置文件夹内图标位置（同样：占用则交换） */
+export function setIconPosition(folderId: string, iconId: string, x: number, y: number): boolean {
+  const found = findFolder(folderId);
+  if (!found) return false;
+  const items = found.folder.items;
+  const sx = Math.max(0, Math.min(FOLDER_COLS - 1, Math.round(x)));
+  const sy = Math.max(0, Math.round(y));
+  const icon = items.find((i) => i.id === iconId);
+  if (!icon) return false;
+  const iconRect = { x: sx, y: sy, w: icon.size.w, h: icon.size.h };
+  const other = items.find((i) => i.id !== iconId && rectsOverlap(iconRect, cellRect(i)));
+  if (other) {
+    const ox = other.x ?? 0;
+    const oy = other.y ?? 0;
+    other.x = icon.x ?? 0;
+    other.y = icon.y ?? 0;
+    icon.x = ox;
+    icon.y = oy;
+  } else {
+    icon.x = sx;
+    icon.y = sy;
+  }
+  return true;
 }
 
 /** 找到文件夹单元格（含所在页） */
@@ -89,11 +167,12 @@ export function deleteFolder(folderId: string): void {
   }
 }
 
-/** 向文件夹内添加图标（文件夹可能在任何页） */
+/** 向文件夹内添加图标（文件夹可能在任何页；自由摆放：自动找空位） */
 export function addIconToFolder(folderId: string, icon: IconCell): boolean {
   const found = findFolder(folderId);
   if (!found) return false;
-  found.folder.items.push({ ...icon });
+  const slot = findFreeSlot(found.folder.items.map(cellRect), FOLDER_COLS, 1, 1);
+  found.folder.items.push({ ...icon, x: slot.x, y: slot.y });
   return true;
 }
 
@@ -149,10 +228,11 @@ export function setFolderEmoji(folderId: string, emoji: string): boolean {
   return true;
 }
 
-/** 把图标移入文件夹（在所有页面与文件夹内查找源图标；支持跨页/跨文件夹移动） */
+/** 把图标移入文件夹（在所有页面与文件夹内查找源图标；支持跨页/跨文件夹移动；入文件夹自动找空位） */
 export function moveIconToFolder(iconId: string, folderId: string): boolean {
   const target = findFolder(folderId);
   if (!target) return false;
+  const slot = findFreeSlot(target.folder.items.map(cellRect), FOLDER_COLS, 1, 1);
 
   // 1) 页面级图标（跨页拖拽/按钮移动）
   for (let p = 0; p < layout.pages.length; p++) {
@@ -161,7 +241,7 @@ export function moveIconToFolder(iconId: string, folderId: string): boolean {
     if (i >= 0) {
       const icon = arr[i] as IconCell;
       arr.splice(i, 1);
-      target.folder.items.push({ ...icon });
+      target.folder.items.push({ ...icon, x: slot.x, y: slot.y });
       return true;
     }
   }
@@ -173,7 +253,7 @@ export function moveIconToFolder(iconId: string, folderId: string): boolean {
         const i = cell.items.findIndex((x) => x.id === iconId);
         if (i >= 0) {
           const [icon] = cell.items.splice(i, 1);
-          target.folder.items.push(icon);
+          target.folder.items.push({ ...icon, x: slot.x, y: slot.y });
           return true;
         }
       }
@@ -332,12 +412,8 @@ export function reorderCellById(
   return true;
 }
 
-/** 跨页移动：按 id 在所有页面中找源单元，从源页移除并插入当前页目标位置（支持边缘翻页拖拽） */
-export function moveCellAcrossPages(
-  dragId: string,
-  targetId: string,
-  pos: "before" | "after",
-): boolean {
+/** 跨页移动（自由摆放 v3）：按 id 在所有页面中找源单元，移除并放到当前页指定坐标（支持边缘翻页拖拽） */
+export function moveCellAcrossPages(dragId: string, x: number, y: number): boolean {
   let fromPage = -1;
   let fromIndex = -1;
   for (let p = 0; p < layout.pages.length; p++) {
@@ -352,13 +428,12 @@ export function moveCellAcrossPages(
 
   const targetArr = layout.pages[currentPage.index];
   if (!targetArr) return false;
-  const to = targetArr.findIndex((c) => c.id === targetId);
-  if (to < 0) return false;
 
   const [cell] = layout.pages[fromPage].splice(fromIndex, 1);
-  let insertAt = targetArr.findIndex((c) => c.id === targetId);
-  if (insertAt < 0) insertAt = targetArr.length;
-  if (pos === "after") insertAt += 1;
-  targetArr.splice(insertAt, 0, cell);
+  const sx = Math.max(0, Math.min(PAGE_COLS - 1, Math.round(x)));
+  const sy = Math.max(0, Math.round(y));
+  cell.x = sx;
+  cell.y = sy;
+  targetArr.push(cell);
   return true;
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  // 文件夹内图标（v3 自由摆放）：FOLDER_COLS 列虚拟画布，拖拽吸附网格、不自动重排
   import IconTile from "./IconTile.svelte";
   import WidgetTile from "./WidgetTile.svelte";
   import {
@@ -10,7 +11,9 @@
     ui,
   } from "../core/stores.svelte";
   import { filterIcons } from "../core/search";
+  import { appearance } from "../core/appearance.svelte";
   import type { IconCell, PluginInfo } from "../core/types";
+  import { cellRect, findFreeSlot, FOLDER_COLS } from "../core/layout";
 
   let {
     onaddclick,
@@ -18,7 +21,7 @@
     onmove,
     onediticon,
     ondelete,
-    onreorder,
+    ondropat,
     onresize,
     onsettings,
   }: {
@@ -28,8 +31,8 @@
     onediticon?: (iconId: string) => void;
     /** 删除文件夹内图标（由外层统一弹确认框） */
     ondelete?: (folderId: string, iconId: string) => void;
-    /** 文件夹内拖拽排序：targetId 为 null 表示追加到末尾 */
-    onreorder?: (dragId: string, targetId: string | null, pos: "before" | "after") => void;
+    /** 自由摆放落点：文件夹内图标放到 (x, y) 网格坐标 */
+    ondropat?: (folderId: string, iconId: string, x: number, y: number) => void;
     onresize?: (iconId: string) => void;
     onsettings?: (cellId: string) => void;
   } = $props();
@@ -50,26 +53,79 @@
     folder ? filterIcons(folder.items, plugins, query.text) : [],
   );
 
-  // ---------- 文件夹内拖拽排序（M8，Pointer Events；简化版：无翻页/无跨文件夹） ----------
+  // ---------- 文件夹内拖拽（自由摆放：吸附网格、不自动重排） ----------
 
   let gridEl = $state<HTMLElement | undefined>();
+  let canvasEl = $state<HTMLElement | undefined>();
+  let tile = $state(84);
+  let gap = $state(16);
+  const PAD = 6;
+  const SLOT = $derived(tile + gap);
+
   let dragging = false;
   let draggingId = $state<string | null>(null);
-  let overId = $state<string | null>(null);
-  let overPos = $state<"before" | "after">("before");
+  let dragSlot = $state<{ x: number; y: number; w: number; h: number } | null>(null);
+  let dragDx = $state(0);
+  let dragDy = $state(0);
   let suppressClick = false;
   let pointerId: number | null = null;
   let dragCandidate: string | null = null;
   let startX = 0;
   let startY = 0;
+  let dragStartPointerX = 0;
+  let dragStartPointerY = 0;
   let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function pxX(icon: IconCell): number {
+    return PAD + (icon.x ?? 0) * SLOT;
+  }
+  function pxY(icon: IconCell): number {
+    return PAD + (icon.y ?? 0) * SLOT;
+  }
+  function pxW(icon: IconCell): number {
+    return icon.size.w * tile + (icon.size.w - 1) * gap;
+  }
+  function pxH(icon: IconCell): number {
+    return icon.size.h * tile + (icon.size.h - 1) * gap;
+  }
+
+  const canvasW = $derived(FOLDER_COLS * tile + (FOLDER_COLS - 1) * gap + PAD * 2);
+  const canvasH = $derived.by(() => {
+    let max = 0;
+    for (const icon of folder?.items ?? []) {
+      if (icon.id === draggingId) continue;
+      max = Math.max(max, ((icon.y ?? 0) + icon.size.h) * SLOT);
+    }
+    return max + PAD + 10;
+  });
+
+  const addPos = $derived(
+    query.text === ""
+      ? findFreeSlot((folder?.items ?? []).map(cellRect), FOLDER_COLS, 1, 1)
+      : null,
+  );
+
+  function measure(): void {
+    if (!gridEl) return;
+    const style = getComputedStyle(gridEl);
+    const t = parseFloat(style.getPropertyValue("--tile-size"));
+    const g = parseFloat(style.getPropertyValue("--gap"));
+    if (Number.isFinite(t) && t > 0) tile = t;
+    if (Number.isFinite(g) && g >= 0) gap = g;
+  }
+
+  // 首次挂载与图标大小变化时重新度量
+  $effect(() => {
+    void appearance.tileSize;
+    measure();
+  });
 
   function onPointerDown(e: PointerEvent): void {
     if ((e.target as HTMLElement).closest("button")) return; // 忽略操作按钮
-    const tile = (e.target as HTMLElement).closest<HTMLElement>("[data-cell-id]");
-    if (!tile) return;
+    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-cell-id]");
+    if (!el) return;
     pointerId = e.pointerId;
-    dragCandidate = tile.dataset.cellId ?? null;
+    dragCandidate = el.dataset.cellId ?? null;
     startX = e.clientX;
     startY = e.clientY;
     if (e.pointerType === "touch" && dragCandidate) {
@@ -84,7 +140,9 @@
   function onPointerMove(e: PointerEvent): void {
     if (dragging) {
       e.preventDefault();
-      updateOver(e.clientX, e.clientY);
+      dragDx = e.clientX - dragStartPointerX;
+      dragDy = e.clientY - dragStartPointerY;
+      updateTarget(e.clientX, e.clientY);
       return;
     }
     if (pointerId === null || pointerId !== e.pointerId || !dragCandidate) return;
@@ -108,11 +166,8 @@
     clearLongPress();
     if (!dragging) return;
     e.preventDefault();
-    if (overId && overId !== draggingId) {
-      onreorder?.(draggingId!, overId, overPos);
-    } else {
-      // 空白处释放 → 追加到末尾
-      onreorder?.(draggingId!, null, "after");
+    if (dragSlot && dragSlot.x >= 0 && folder) {
+      ondropat?.(folder.id, draggingId!, dragSlot.x, dragSlot.y);
     }
     suppressClick = true;
     endDrag();
@@ -135,7 +190,15 @@
     if (dragging) return;
     dragging = true;
     draggingId = id;
-    overId = null;
+    const icon = folder?.items.find((i) => i.id === id);
+    dragSlot = {
+      x: icon?.x ?? 0,
+      y: icon?.y ?? 0,
+      w: icon?.size.w ?? 1,
+      h: icon?.size.h ?? 1,
+    };
+    dragStartPointerX = startX;
+    dragStartPointerY = startY;
     const pid = pointerId;
     if (gridEl && pid !== null) {
       try {
@@ -149,7 +212,9 @@
   function endDrag(): void {
     dragging = false;
     draggingId = null;
-    overId = null;
+    dragSlot = null;
+    dragDx = 0;
+    dragDy = 0;
     dragCandidate = null;
     const pid = pointerId;
     pointerId = null;
@@ -162,17 +227,21 @@
     }
   }
 
-  function updateOver(x: number, y: number): void {
-    const el = document.elementFromPoint(x, y);
-    const tile = (el as HTMLElement | null)?.closest?.<HTMLElement>("[data-cell-id]");
-    const targetId = tile?.dataset.cellId ?? null;
-    if (targetId && targetId !== draggingId) {
-      const rect = tile!.getBoundingClientRect();
-      overId = targetId;
-      overPos = x < rect.left + rect.width / 2 ? "before" : "after";
-    } else {
-      overId = null;
-    }
+  function updateTarget(x: number, y: number): void {
+    if (!canvasEl || !draggingId) return;
+    const icon = folder?.items.find((i) => i.id === draggingId);
+    const w = icon?.size.w ?? 1;
+    const h = icon?.size.h ?? 1;
+    const rect = canvasEl.getBoundingClientRect();
+    const slot = SLOT;
+    const tx = Math.round((x - rect.left - PAD - (w * slot) / 2) / slot);
+    const ty = Math.round((y - rect.top - PAD - (h * slot) / 2) / slot);
+    dragSlot = {
+      x: Math.max(0, Math.min(FOLDER_COLS - w, tx)),
+      y: Math.max(0, ty),
+      w,
+      h,
+    };
   }
 
   function clearLongPress(): void {
@@ -204,45 +273,59 @@
       if (e.key === "Escape") endDrag();
     }}
   >
-    {#each visible as icon (icon.id)}
-      {@const isOver = overId === icon.id}
-      {@const isDragging = draggingId === icon.id}
-      <div
-        class="cell-wrap"
-        class:over={isOver}
-        class:before={isOver && overPos === "before"}
-        class:after={isOver && overPos === "after"}
-        class:dragging={isDragging}
-        style="grid-column: span {icon.size.w}; grid-row: span {icon.size.h};"
-      >
-        {#if isWidget(icon)}
-          <WidgetTile
-            item={icon}
-            editMode={ui.editMode}
-            ondelete={() => ondelete?.(folder.id, icon.id)}
-            onmove={() => onmove?.(icon.id)}
-            onresize={() => onresize?.(icon.id)}
-            onsettings={() => onsettings?.(icon.id)}
-          />
-        {:else}
-          <IconTile
-            item={icon}
-            plugin={pluginOf(icon)}
-            editMode={ui.editMode}
-            onlaunch={() => !ui.editMode && onlaunch?.(icon.id)}
-            ondelete={() => ondelete?.(folder.id, icon.id)}
-            onmove={() => onmove?.(icon.id)}
-            onedit={() => onediticon?.(icon.id)}
-            onresize={() => onresize?.(icon.id)}
-            onsettings={() => onsettings?.(icon.id)}
-          />
-        {/if}
-      </div>
-    {/each}
+    <div
+      class="canvas"
+      bind:this={canvasEl}
+      style="width:{canvasW}px;height:{canvasH}px;"
+    >
+      {#each visible as icon (icon.id)}
+        {@const isDragging = draggingId === icon.id}
+        <div
+          class="cell-wrap"
+          class:dragging={isDragging}
+          data-cell-id={icon.id}
+          style="left:{pxX(icon)}px;top:{pxY(icon)}px;width:{pxW(icon)}px;height:{pxH(icon)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
+        >
+          {#if isWidget(icon)}
+            <WidgetTile
+              item={icon}
+              editMode={ui.editMode}
+              ondelete={() => ondelete?.(folder.id, icon.id)}
+              onmove={() => onmove?.(icon.id)}
+              onresize={() => onresize?.(icon.id)}
+              onsettings={() => onsettings?.(icon.id)}
+            />
+          {:else}
+            <IconTile
+              item={icon}
+              plugin={pluginOf(icon)}
+              editMode={ui.editMode}
+              onlaunch={() => !ui.editMode && onlaunch?.(icon.id)}
+              ondelete={() => ondelete?.(folder.id, icon.id)}
+              onmove={() => onmove?.(icon.id)}
+              onedit={() => onediticon?.(icon.id)}
+              onresize={() => onresize?.(icon.id)}
+              onsettings={() => onsettings?.(icon.id)}
+            />
+          {/if}
+        </div>
+      {/each}
 
-    {#if query.text === ""}
-      <button class="add-tile" onclick={onaddclick}>＋</button>
-    {/if}
+      {#if dragSlot}
+        <div
+          class="slot-ghost"
+          style="left:{PAD + dragSlot.x * SLOT}px;top:{PAD + dragSlot.y * SLOT}px;width:{dragSlot.w * tile + (dragSlot.w - 1) * gap}px;height:{dragSlot.h * tile + (dragSlot.h - 1) * gap}px;"
+        ></div>
+      {/if}
+
+      {#if addPos}
+        <button
+          class="add-tile"
+          style="left:{PAD + addPos.x * SLOT}px;top:{PAD + addPos.y * SLOT}px;width:{tile}px;height:{tile}px;"
+          onclick={onaddclick}
+        >＋</button>
+      {/if}
+    </div>
   </div>
 {/if}
 
@@ -275,17 +358,11 @@
     color: var(--fg-dim);
   }
   .grid {
-    display: grid;
-    /* 固定基准粒度（同主网格）：尺寸严格为 1×1 的整数倍 */
-    grid-template-columns: repeat(auto-fill, var(--tile-size));
-    grid-auto-rows: var(--tile-size);
-    justify-content: center;
-    gap: var(--gap);
-    align-content: start;
+    position: relative;
     height: calc(100% - 56px);
     overflow-y: auto;
-    padding: 4px;
-    touch-action: pan-y; /* 触屏：纵向滚动交给浏览器，长按/横向由应用处理 */
+    overflow-x: hidden;
+    touch-action: pan-y;
     /* 容器 tabindex=-1 可被点击聚焦；按键后 Chromium 会画默认黑色 focus ring → 禁用 */
     outline: none;
   }
@@ -293,38 +370,34 @@
   .grid:focus-visible {
     outline: none;
   }
-  .cell-wrap {
+  .canvas {
     position: relative;
+    margin: 0 auto;
+  }
+  .cell-wrap {
+    position: absolute;
     touch-action: pan-y;
   }
   .cell-wrap.dragging {
-    opacity: 0.4;
+    transition: none;
   }
-  .cell-wrap.before::before,
-  .cell-wrap.after::after {
-    content: "";
+  .slot-ghost {
     position: absolute;
-    top: 8%;
-    bottom: 8%;
-    width: 4px;
-    border-radius: 2px;
-    background: var(--accent);
-    z-index: 3;
-  }
-  .cell-wrap.before::before {
-    left: -8px;
-  }
-  .cell-wrap.after::after {
-    right: -8px;
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    pointer-events: none;
+    z-index: 5;
   }
   .add-tile {
-    height: var(--tile-size);
+    position: absolute;
     border: 2px dashed var(--bg-elev);
     border-radius: var(--radius);
     background: transparent;
     color: var(--fg-dim);
     font-size: 28px;
     cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
   }
   .add-tile:hover {
     border-color: var(--accent);

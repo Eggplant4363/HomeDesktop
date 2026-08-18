@@ -19,7 +19,6 @@
     enterEditMode,
     exitEditMode,
     layout,
-    moveCellAcrossPages,
     moveIconToFolder,
     openFolder,
     plugins,
@@ -29,10 +28,11 @@
     removeIconFromFolder,
     removePage,
     renameFolder,
-    reorderIconInFolder,
     replaceCellWithApp,
+    setCellPosition,
     setCellSize,
     setFolderEmoji,
+    setIconPosition,
     ui,
     updateIconAppearance,
   } from "./core/stores.svelte";
@@ -536,16 +536,11 @@
     moveTarget = null;
   }
 
-  /** 文件夹内拖拽排序（M8） */
-  function handleFolderReorder(
-    dragId: string,
-    targetId: string | null,
-    pos: "before" | "after",
-  ): void {
-    const fid = openFolder.folderId;
-    if (fid && reorderIconInFolder(fid, dragId, targetId, pos)) {
+  /** 文件夹内自由摆放落点（v3） */
+  function handleFolderDropAt(folderId: string, iconId: string, x: number, y: number): void {
+    if (setIconPosition(folderId, iconId, x, y)) {
       persist();
-      log.info(`文件夹内重排: ${dragId} ${pos} ${targetId ?? "末尾"}`);
+      log.info(`文件夹内摆放: ${iconId} -> (${x}, ${y})`);
     }
   }
 
@@ -633,9 +628,13 @@
 
   // ---------- 拖拽排序 ----------
 
-  function handleReorder(dragId: string, targetId: string, pos: "before" | "after"): void {
-    if (moveCellAcrossPages(dragId, targetId, pos)) {
+  // ---------- 自由摆放（v3） ----------
+
+  /** 页面级落点：目标槽被占用自动交换位置 */
+  function handleDropAt(dragId: string, x: number, y: number): void {
+    if (setCellPosition(dragId, x, y)) {
       persist();
+      log.info(`摆放: ${dragId} -> (${x}, ${y})`);
     }
   }
 
@@ -1210,7 +1209,7 @@
         onmove={(id) => handleMove(id)}
         onediticon={(id) => handleEditIcon(id)}
         ondelete={(fid, iid) => handleDeleteFolderItem(fid, iid)}
-        onreorder={handleFolderReorder}
+        ondropat={handleFolderDropAt}
         onresize={(id) => handleResize(id)}
         onsettings={(id) => handleSettings(id)}
       />
@@ -1227,7 +1226,7 @@
         onmoveicon={(id) => handleMove(id)}
         onresize={(id) => handleResize(id)}
         onsettings={(id) => handleSettings(id)}
-        onreorder={handleReorder}
+        ondropat={handleDropAt}
         ondropinto={handleDropInto}
         onflipprev={handlePrev}
         onflipnext={handleNext}

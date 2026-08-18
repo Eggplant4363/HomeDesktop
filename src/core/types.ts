@@ -90,6 +90,9 @@ export interface IconCell {
   color?: string;
   /** 借用系统应用图标（M9：存系统应用路径，渲染时用 app_icon 取真实图标） */
   iconPath?: string;
+  /** 自由摆放（v3）：页面/文件夹内网格坐标（缺省由迁移分配） */
+  x?: number;
+  y?: number;
 }
 
 /** 文件夹单元（内含图标列表） */
@@ -99,6 +102,9 @@ export interface FolderCell {
   name: string;
   emoji: string;
   items: IconCell[];
+  /** 自由摆放（v3）：页面网格坐标（缺省由迁移分配；文件夹占 1x1） */
+  x?: number;
+  y?: number;
 }
 
 /** 网格单元格：图标 | 文件夹 */
