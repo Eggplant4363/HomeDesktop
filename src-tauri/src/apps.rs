@@ -27,7 +27,8 @@ pub fn apps_scan() -> Vec<AppInfo> {
     apps
 }
 
-/// 注册表 App Paths：HKLM + HKCU
+/// 注册表 App Paths：HKLM + HKCU（winreg 仅 Windows；非 Windows 平台无注册表扫描）
+#[cfg(windows)]
 fn scan_registry_app_paths(out: &mut Vec<AppInfo>, seen: &mut HashSet<String>) {
     use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
     use winreg::RegKey;
@@ -64,6 +65,10 @@ fn scan_registry_app_paths(out: &mut Vec<AppInfo>, seen: &mut HashSet<String>) {
         }
     }
 }
+
+/// 非 Windows 平台：无注册表扫描（空实现）
+#[cfg(not(windows))]
+fn scan_registry_app_paths(_out: &mut Vec<AppInfo>, _seen: &mut HashSet<String>) {}
 
 /// "chrome.exe" → "Chrome"；退化用 exe 文件名
 fn display_name(entry: &str, path: &str) -> String {

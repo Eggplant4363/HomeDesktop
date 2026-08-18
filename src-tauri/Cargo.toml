@@ -24,8 +24,15 @@ tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 zip = "2"
-winreg = "0.55"
 base64 = "0.22"
+homedesktop-core = { path = "../crates/homedesktop-core" }
+
+# Windows 专用依赖：
+# - winreg：非 Windows 直接 compile_error!（作者明确要求 target 门控）
+# - windows 0.61：其依赖 windows-future 0.2.1 在非 Windows 编译失败（上游 bug，
+#   imp::marshaler 无 cfg(windows) 保护）→ 必须仅 Windows 目标才拉入依赖树
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
 windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_System_Com",
@@ -36,5 +43,4 @@ windows = { version = "0.61", features = [
   "Win32_Graphics_Gdi",
   "Win32_Storage_FileSystem",
 ] }
-homedesktop-core = { path = "../crates/homedesktop-core" }
 
