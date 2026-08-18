@@ -3,6 +3,19 @@
 > 按 skill `product-driven-project` P5 要求维护：代码与文档同步记录。
 > 本文件即本项目长期记忆（Memory）：每轮迭代/每个 bug 修复/每个产品决策都记录于此。
 
+## 2026-02-13（发布到 GitHub + CI 三平台全绿）✅
+
+- **发布**：仓库 https://github.com/Eggplant4363/HomeDesktop （私有，SSH 密钥 id_ed25519_homedesktop，提交身份 Eggplant4363）；README 重写（功能清单/插件示例/打包说明）+ 主界面截图 + MIT LICENSE
+- **CI 修复历程**（build.yml，三平台矩阵 Windows/macOS/Linux）：
+  1. Windows 缺 WebView2Loader.dll（exe 静态导入）→ 构建前从 NuGet（Microsoft.Web.WebView2）拉取
+  2. macOS/Linux 编译失败：windows 0.61 的无条件依赖把 windows-future 0.2.1 拖进依赖树，其 bindings.rs 在非 Windows 引用 windows_core::imp::IMarshal/marshaler（上游 bug，无 0.2.2 修复版）；winreg 0.55 在非 Windows 直接 compile_error! → 两个依赖都改为 [target.'cfg(windows)'.dependencies]，apps.rs::scan_registry_app_paths 加 cfg 门控 + 非 Windows 空实现（stats.rs 原有 cfg 桩）
+  3. macOS/Linux 仍失败：tauri.conf.json bundle.resources 引用 resources/WebView2Loader.dll，仅 Windows 由 build.rs 从 target 复制 → DLL 入库（1.0.3650.58，与发布产物一致；Windows 上 build.rs 仍用 webview2-com-sys 生成版覆盖）
+- **结果**：三平台 Actions 全绿（Windows NSIS/MSI、macOS dmg、Linux deb/AppImage 产物自动上传 artifact）
+# 变更日志 — HomeDesktop
+
+> 按 skill `product-driven-project` P5 要求维护：代码与文档同步记录。
+> 本文件即本项目长期记忆（Memory）：每轮迭代/每个 bug 修复/每个产品决策都记录于此。
+
 ## 2026-02-13（插件通知能力：系统右下角 toast）✅ 用户验收通过
 
 - **需求**（用户提出）：给插件加**通知能力**（不是界面按钮）——比如倒计时到点时在桌面右下角弹通知。
