@@ -1,5 +1,7 @@
 <script lang="ts">
-  // 插件市场：本地（market/*.zip 目录） + 在线（远程仓库 market/index.json，M18）
+  // 插件市场：本地（market/*.zip 目录） + 在线（远程仓库，M18）
+  // 在线市场默认走 jsDelivr CDN（raw.githubusercontent 在国内网络常不可达）；
+  // 可用配置项 plugin.marketUrl 覆盖为其他索引地址（zip 下载地址自动跟随索引目录）。
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { installPlugin, loadPlugins } from "../core/pluginLoader";
@@ -12,9 +14,9 @@
     onmessage?: (msg: string, isError?: boolean) => void;
   } = $props();
 
-  // 在线市场仓库索引（HomeDesktopPlugins 仓库，公开）
-  const ONLINE_INDEX_URL =
-    "https://raw.githubusercontent.com/Eggplant4363/HomeDesktopPlugins/main/market/index.json";
+  // 默认在线市场索引（HomeDesktopPlugins 仓库 jsDelivr CDN）
+  const DEFAULT_INDEX_URL =
+    "https://cdn.jsdelivr.net/gh/Eggplant4363/HomeDesktopPlugins@main/market/index.json";
 
   let tab = $state<"local" | "online">("local");
 
@@ -22,6 +24,17 @@
   let online = $state<RemoteMarket | null>(null);
   let error = $state("");
   let loading = $state(false);
+  let indexUrl = $state(DEFAULT_INDEX_URL);
+
+  /** 读取配置覆盖（plugin.marketUrl），失败保持默认 */
+  async function loadIndexUrl(): Promise<void> {
+    try {
+      const v = await invoke<unknown>("config_get", { key: "plugin.marketUrl" });
+      if (typeof v === "string" && v.trim()) indexUrl = v.trim();
+    } catch {
+      /* 保持默认 */
+    }
+  }
 
   async function refresh(): Promise<void> {
     try {
@@ -36,7 +49,7 @@
   async function refreshOnline(): Promise<void> {
     loading = true;
     try {
-      online = await invoke<RemoteMarket>("market_remote_list", { url: ONLINE_INDEX_URL });
+      online = await invoke<RemoteMarket>("market_remote_list", { url: indexUrl });
       error = "";
       log.info(`在线市场拉取成功: ${online.items.length} 个插件`);
     } catch (e) {
@@ -61,10 +74,16 @@
     }
   }
 
-  async function installRemote(item: RemoteMarketItem, base: string): Promise<void> {
+  /** zip 下载基础 URL：跟随索引所在目录 */
+  function zipBase(): string {
+    const i = indexUrl.lastIndexOf("/");
+    return i > 0 ? indexUrl.slice(0, i + 1) : indexUrl;
+  }
+
+  async function installRemote(item: RemoteMarketItem): Promise<void> {
     try {
       const installed = await invoke<{ name: string; version: string }>("market_remote_install", {
-        base,
+        base: zipBase(),
         file: item.file,
       });
       await loadPlugins();
@@ -79,8 +98,10 @@
   }
 
   onMount(() => {
-    void refresh();
-    void refreshOnline();
+    void loadIndexUrl().then(() => {
+      void refresh();
+      void refreshOnline();
+    });
   });
 </script>
 
@@ -121,7 +142,7 @@
     </div>
   {:else}
     <div class="hint">
-      在线市场：<code>{ONLINE_INDEX_URL}</code>
+      在线市场：<code>{indexUrl}</code>
     </div>
     <button class="refresh" disabled={loading} onclick={() => void refreshOnline()}>
       {loading ? "加载中…" : "🔄 刷新列表"}
@@ -148,9 +169,7 @@
           {#if m.installed}
             <span class="tag installed">已安装</span>
           {:else}
-            <button class="install-btn" onclick={() => void installRemote(m, online?.base ?? "")}>
-              安装
-            </button>
+            <button class="install-btn" onclick={() => void installRemote(m)}>安装</button>
           {/if}
         </div>
       {/each}
