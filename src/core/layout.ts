@@ -22,14 +22,15 @@ export function rectsOverlap(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
-/** 在 occupied 矩形集中找 w×h 的首个空位（行优先扫描；超出列宽换行） */
+/** 在 occupied 矩形集中找 w×h 的首个空位（行优先扫描；超出列宽/最大行数换行） */
 export function findFreeSlot(
   occupied: Rect[],
   cols: number,
   w: number,
   h: number,
+  maxRows = 500,
 ): { x: number; y: number } {
-  for (let y = 0; y < 500; y++) {
+  for (let y = 0; y < maxRows; y++) {
     for (let x = 0; x < cols; x++) {
       if (x + w > cols) continue;
       const r: Rect = { x, y, w, h };

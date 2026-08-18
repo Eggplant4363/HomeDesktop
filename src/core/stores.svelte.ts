@@ -58,9 +58,10 @@ export function addCell(cell: Cell, page = currentPage.index): void {
 }
 
 /** 画布适配：把超出画布（cols 列）或与其他单元重叠的单元移到画布内空位（不重排正常单元）；返回是否发生调整 */
-export function fitCellsToCols(page: number, cols: number): boolean {
+export function fitCellsToCols(page: number, cols: number, maxRows?: number): boolean {
   const arr = layout.pages[page];
   if (!arr || cols < 1) return false;
+  const rows = maxRows && maxRows > 0 ? maxRows : undefined;
   const placed: { x: number; y: number; w: number; h: number }[] = [];
   let changed = false;
   let moved = 0;
@@ -70,19 +71,23 @@ export function fitCellsToCols(page: number, cols: number): boolean {
     const x = cell.x ?? 0;
     const y = cell.y ?? 0;
     const rect = { x, y, w, h };
-    const fits = x + w <= cols && !placed.some((p) => rectsOverlap(rect, p));
+    const fits =
+      x + w <= cols && (!rows || y + h <= rows) && !placed.some((p) => rectsOverlap(rect, p));
     if (fits) {
       placed.push(rect);
       continue;
     }
-    const slot = findFreeSlot(placed, cols, w, h);
+    const slot = findFreeSlot(placed, cols, w, h, rows);
     cell.x = slot.x;
     cell.y = slot.y;
     placed.push({ x: slot.x, y: slot.y, w, h });
     changed = true;
     moved += 1;
   }
-  if (moved > 0) log.info(`画布适配: 第 ${page + 1} 页 ${cols} 列，调整 ${moved} 个越界/重叠单元`);
+  if (moved > 0)
+    log.info(
+      `画布适配: 第 ${page + 1} 页 ${cols} 列${rows ? ` ${rows} 行` : ""}，调整 ${moved} 个越界/重叠单元`,
+    );
   return changed;
 }
 export function removeCell(id: string, page = currentPage.index): void {

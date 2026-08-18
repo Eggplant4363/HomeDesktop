@@ -8,6 +8,7 @@
   import { appearance } from "../core/appearance.svelte";
   import { filterCells } from "../core/search";
   import { PAGE_COLS, setActivePageCols } from "../core/layout";
+  import { log } from "../core/logger";
 
   let {
     cells,
@@ -60,6 +61,8 @@
 
   /** 当前窗口能放下的最小列数（Grid 按宽度计算，同步到 stores 供自动找空位使用） */
   let cols = $state(PAGE_COLS);
+  /** 视口能容纳的最大行数（画布高度边界，超出则压缩） */
+  let maxRows = $state(500);
 
   let dragging = false;
   let draggingId = $state<string | null>(null);
@@ -134,6 +137,8 @@
       cols = c;
       setActivePageCols(c);
     }
+    const mr = Math.max(1, Math.floor((gridEl.clientHeight - PAD * 2) / SLOT));
+    if (mr !== maxRows) maxRows = mr;
   }
 
   // 首次挂载、图标大小变化、窗口尺寸变化时重新度量（tile/gap/列数用于画布与吸附计算）
@@ -145,11 +150,11 @@
     return () => window.removeEventListener("resize", onResize);
   });
 
-  // 列数或单元变化时：把超出画布的单元移回画布内空位（只处理越界，不重排）
+  // 列数/行数/单元变化时：把越界或重叠的单元移到画布内空位（不重排正常单元）
   $effect(() => {
     void cells;
     if (cols > 0 && cells.length > 0) {
-      if (fitCellsToCols(currentPage.index, cols)) onfitted?.();
+      if (fitCellsToCols(currentPage.index, cols, maxRows)) onfitted?.();
     }
   });
 
