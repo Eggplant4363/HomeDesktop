@@ -1269,7 +1269,8 @@
     padding: 8px 16px;
     border-radius: 10px;
     font-size: 13px;
-    z-index: 50;
+    /* 提示消息必须盖过所有弹层（插件管理 55、确认框 200） */
+    z-index: 300;
   }
   .overlay {
     position: fixed;
