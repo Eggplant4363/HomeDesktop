@@ -13,7 +13,6 @@ dist-ssr/
 src-tauri/target/
 target/
 src-tauri/gen/schemas/
-src-tauri/resources/WebView2Loader.dll
 .toolchain/
 
 # Editor
@@ -25,6 +24,7 @@ src-tauri/resources/WebView2Loader.dll
 # Logs
 *.log
 npm-debug.log*
+
 # Local-only toolchain / build caches / install-test artifacts
 .cargo/
 .dsh/
