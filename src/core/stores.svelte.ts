@@ -1,0 +1,364 @@
+// 全局状态（Svelte 5 runes 模块）
+import type { Cell, IconCell, Layout, PluginInfo } from "./types";
+
+export const plugins = $state<PluginInfo[]>([]);
+export const layout = $state<Layout>({ version: 2, pages: [[]] });
+export const query = $state({ text: "" });
+export const currentPage = $state({ index: 0 });
+/** 当前打开的文件夹（null = 主网格视图） */
+export const openFolder = $state<{ page: number; folderId: string | null }>({
+  page: 0,
+  folderId: null,
+});
+/** 编辑模式（苹果风格：进入后图标抖动、显示缩放/删除等操作；正常模式点击即启动） */
+export const ui = $state({ editMode: false });
+
+export function enterEditMode(): void {
+  ui.editMode = true;
+}
+
+export function exitEditMode(): void {
+  ui.editMode = false;
+}
+
+function cloneCell(cell: Cell): Cell {
+  if (cell.kind === "folder") {
+    return { ...cell, items: cell.items.map((i) => ({ ...i })) };
+  }
+  return { ...cell };
+}
+
+export function setPlugins(list: PluginInfo[]): void {
+  plugins.splice(0, plugins.length, ...list);
+}
+
+export function setLayout(next: Layout): void {
+  layout.version = next.version;
+  layout.pages.splice(
+    0,
+    layout.pages.length,
+    ...next.pages.map((page) => page.map(cloneCell)),
+  );
+  if (currentPage.index >= layout.pages.length) currentPage.index = 0;
+  openFolder.folderId = null;
+}
+
+// ---------- 单元格操作 ----------
+
+export function addCell(cell: Cell, page = currentPage.index): void {
+  if (!layout.pages[page]) layout.pages[page] = [];
+  layout.pages[page].push(cloneCell(cell));
+}
+
+export function removeCell(id: string, page = currentPage.index): void {
+  const arr = layout.pages[page];
+  if (!arr) return;
+  const i = arr.findIndex((c) => c.id === id);
+  if (i >= 0) arr.splice(i, 1);
+}
+
+/** 找到文件夹单元格（含所在页） */
+export function findFolder(
+  folderId: string,
+): { page: number; folder: Extract<Cell, { kind: "folder" }> } | undefined {
+  for (let p = 0; p < layout.pages.length; p++) {
+    for (const cell of layout.pages[p]) {
+      if (cell.kind === "folder" && cell.id === folderId) {
+        return { page: p, folder: cell };
+      }
+    }
+  }
+  return undefined;
+}
+
+export function createFolder(name: string, emoji = "📁"): string {
+  const id = crypto.randomUUID();
+  addCell({ kind: "folder", id, name, emoji, items: [] });
+  return id;
+}
+
+export function deleteFolder(folderId: string): void {
+  for (let p = 0; p < layout.pages.length; p++) {
+    const arr = layout.pages[p];
+    const i = arr.findIndex((c) => c.kind === "folder" && c.id === folderId);
+    if (i >= 0) {
+      arr.splice(i, 1);
+      if (openFolder.folderId === folderId) openFolder.folderId = null;
+      return;
+    }
+  }
+}
+
+/** 向文件夹内添加图标（文件夹可能在任何页） */
+export function addIconToFolder(folderId: string, icon: IconCell): boolean {
+  const found = findFolder(folderId);
+  if (!found) return false;
+  found.folder.items.push({ ...icon });
+  return true;
+}
+
+/** 从文件夹内移除图标 */
+export function removeIconFromFolder(folderId: string, iconId: string): void {
+  const found = findFolder(folderId);
+  if (!found) return;
+  const i = found.folder.items.findIndex((x) => x.id === iconId);
+  if (i >= 0) found.folder.items.splice(i, 1);
+}
+
+/** 文件夹内重排（M8）：把 dragId 移到 targetId 之前/之后；targetId 为 null 时追加到末尾 */
+export function reorderIconInFolder(
+  folderId: string,
+  dragId: string,
+  targetId: string | null,
+  pos: "before" | "after",
+): boolean {
+  const found = findFolder(folderId);
+  if (!found) return false;
+  const items = found.folder.items;
+  const from = items.findIndex((x) => x.id === dragId);
+  if (from < 0) return false;
+  const [icon] = items.splice(from, 1);
+  if (!targetId) {
+    items.push(icon);
+    return true;
+  }
+  const to = items.findIndex((x) => x.id === targetId);
+  if (to < 0) {
+    items.push(icon);
+    return true;
+  }
+  items.splice(to + (pos === "after" ? 1 : 0), 0, icon);
+  return true;
+}
+
+/** 文件夹重命名（M8） */
+export function renameFolder(folderId: string, name: string): boolean {
+  const found = findFolder(folderId);
+  if (!found) return false;
+  const trimmed = name.trim();
+  if (trimmed) found.folder.name = trimmed;
+  return true;
+}
+
+/** 文件夹换 emoji（M8） */
+export function setFolderEmoji(folderId: string, emoji: string): boolean {
+  const found = findFolder(folderId);
+  if (!found) return false;
+  const trimmed = emoji.trim();
+  if (trimmed) found.folder.emoji = trimmed;
+  return true;
+}
+
+/** 把图标移入文件夹（在所有页面与文件夹内查找源图标；支持跨页/跨文件夹移动） */
+export function moveIconToFolder(iconId: string, folderId: string): boolean {
+  const target = findFolder(folderId);
+  if (!target) return false;
+
+  // 1) 页面级图标（跨页拖拽/按钮移动）
+  for (let p = 0; p < layout.pages.length; p++) {
+    const arr = layout.pages[p];
+    const i = arr?.findIndex((c) => c.kind === "icon" && c.id === iconId) ?? -1;
+    if (i >= 0) {
+      const icon = arr[i] as IconCell;
+      arr.splice(i, 1);
+      target.folder.items.push({ ...icon });
+      return true;
+    }
+  }
+
+  // 2) 文件夹内图标（移到另一个文件夹；不能移进自己所在的文件夹）
+  for (const page of layout.pages) {
+    for (const cell of page) {
+      if (cell.kind === "folder" && cell.id !== folderId) {
+        const i = cell.items.findIndex((x) => x.id === iconId);
+        if (i >= 0) {
+          const [icon] = cell.items.splice(i, 1);
+          target.folder.items.push(icon);
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/** 自定义图标外观（M9）：重命名 / 换 emoji / 换颜色 / 借用系统应用图标（传 undefined 不改，传空字符串=清除） */
+export function updateIconAppearance(
+  cellId: string,
+  patch: {
+    title?: string;
+    emoji?: string;
+    color?: string;
+    iconPath?: string;
+  },
+): boolean {
+  const apply = (icon: IconCell): void => {
+    if (patch.title !== undefined && patch.title.trim()) icon.title = patch.title.trim();
+    if (patch.emoji !== undefined) icon.emoji = patch.emoji ? patch.emoji : undefined;
+    if (patch.color !== undefined) icon.color = patch.color ? patch.color : undefined;
+    if (patch.iconPath !== undefined) icon.iconPath = patch.iconPath ? patch.iconPath : undefined;
+  };
+  for (const page of layout.pages) {
+    for (const cell of page) {
+      if (cell.kind === "icon" && cell.id === cellId) {
+        apply(cell);
+        return true;
+      }
+      if (cell.kind === "folder") {
+        const icon = cell.items.find((i) => i.id === cellId);
+        if (icon) {
+          apply(icon);
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/** 原位替换图标为应用（系统应用插件槽位）：保持原位置与 id，改标题/动作/插件归属 */
+export function replaceCellWithApp(
+  cellId: string,
+  app: { name: string; path: string },
+): boolean {
+  for (const page of layout.pages) {
+    for (const cell of page) {
+      if (cell.kind === "icon" && cell.id === cellId) {
+        cell.pluginId = "builtin.app";
+        cell.title = app.name;
+        cell.action = { kind: "app", path: app.path };
+        return true;
+      }
+      if (cell.kind === "folder") {
+        const icon = cell.items.find((i) => i.id === cellId);
+        if (icon) {
+          icon.pluginId = "builtin.app";
+          icon.title = app.name;
+          icon.action = { kind: "app", path: app.path };
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/** 移除某插件的所有图标（页面 + 文件夹内；M11 卸载插件时清理桌面） */
+export function removeCellsByPlugin(pluginId: string): number {
+  let n = 0;
+  for (const page of layout.pages) {
+    for (let i = page.length - 1; i >= 0; i--) {
+      const c = page[i];
+      if (c.kind === "icon" && c.pluginId === pluginId) {
+        page.splice(i, 1);
+        n++;
+      } else if (c.kind === "folder") {
+        const items = c.items;
+        for (let j = items.length - 1; j >= 0; j--) {
+          if (items[j].pluginId === pluginId) {
+            items.splice(j, 1);
+            n++;
+          }
+        }
+      }
+    }
+  }
+  return n;
+}
+
+/** 设置单元格尺寸（w/h 必须为正整数，1×1 基准的整数倍） */
+export function setCellSize(
+  id: string,
+  size: { w: number; h: number },
+  page = currentPage.index,
+): boolean {
+  const w = Math.max(1, Math.round(size.w));
+  const h = Math.max(1, Math.round(size.h));
+
+  const arr = layout.pages[page];
+  const cell = arr?.find((c) => c.id === id);
+  if (cell && cell.kind === "icon") {
+    cell.size = { w, h };
+    return true;
+  }
+  // 可能在文件夹内
+  for (const pageCells of layout.pages) {
+    for (const c of pageCells) {
+      if (c.kind === "folder") {
+        const icon = c.items.find((i) => i.id === id);
+        if (icon) {
+          icon.size = { w, h };
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// ---------- 页面操作 ----------
+
+export function addPage(): void {
+  layout.pages.push([]);
+}
+
+export function removePage(index = currentPage.index): void {
+  if (layout.pages.length <= 1) return;
+  layout.pages.splice(index, 1);
+  if (currentPage.index >= layout.pages.length) {
+    currentPage.index = layout.pages.length - 1;
+  }
+}
+
+// ---------- 拖拽排序 ----------
+
+/** 页内重排：把 dragId 单元移到 targetId 单元之前/之后 */
+export function reorderCellById(
+  dragId: string,
+  targetId: string,
+  pos: "before" | "after",
+  page = currentPage.index,
+): boolean {
+  const arr = layout.pages[page];
+  if (!arr) return false;
+  const from = arr.findIndex((c) => c.id === dragId);
+  const to = arr.findIndex((c) => c.id === targetId);
+  if (from < 0 || to < 0 || from === to) return false;
+  const [cell] = arr.splice(from, 1);
+  let insertAt = arr.findIndex((c) => c.id === targetId);
+  if (insertAt < 0) insertAt = arr.length;
+  if (pos === "after") insertAt += 1;
+  arr.splice(insertAt, 0, cell);
+  return true;
+}
+
+/** 跨页移动：按 id 在所有页面中找源单元，从源页移除并插入当前页目标位置（支持边缘翻页拖拽） */
+export function moveCellAcrossPages(
+  dragId: string,
+  targetId: string,
+  pos: "before" | "after",
+): boolean {
+  let fromPage = -1;
+  let fromIndex = -1;
+  for (let p = 0; p < layout.pages.length; p++) {
+    const i = layout.pages[p].findIndex((c) => c.id === dragId);
+    if (i >= 0) {
+      fromPage = p;
+      fromIndex = i;
+      break;
+    }
+  }
+  if (fromPage < 0) return false;
+
+  const targetArr = layout.pages[currentPage.index];
+  if (!targetArr) return false;
+  const to = targetArr.findIndex((c) => c.id === targetId);
+  if (to < 0) return false;
+
+  const [cell] = layout.pages[fromPage].splice(fromIndex, 1);
+  let insertAt = targetArr.findIndex((c) => c.id === targetId);
+  if (insertAt < 0) insertAt = targetArr.length;
+  if (pos === "after") insertAt += 1;
+  targetArr.splice(insertAt, 0, cell);
+  return true;
+}

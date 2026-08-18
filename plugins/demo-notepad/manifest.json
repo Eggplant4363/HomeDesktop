@@ -1,0 +1,14 @@
+{
+  "id": "dev.homedesktop.demo-notepad",
+  "name": "记事本（演示）",
+  "version": "0.2.0",
+  "type": "icon",
+  "emoji": "📝",
+  "sizes": [{ "w": 1, "h": 1 }],
+  "actions": [
+    {
+      "kind": "app",
+      "path": "C:\\Windows\\System32\\notepad.exe"
+    }
+  ]
+}

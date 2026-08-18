@@ -1,0 +1,11 @@
+[package]
+name = "homedesktop-core"
+version = "0.1.0"
+description = "HomeDesktop 纯逻辑核心：插件 manifest、布局、动作分发（无 tauri 依赖，便于单元测试）"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# 纯 Rust 图像编码（仅 png 特性）：用于把系统应用图标 RGBA 像素编码为 PNG
+image = { version = "0.25", default-features = false, features = ["png"] }

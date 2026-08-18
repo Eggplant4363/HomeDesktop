@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm-cache/
+.corepack/
+
+# Build output
+dist/
+dist-ssr/
+*.local
+
+# Tauri / Rust
+src-tauri/target/
+target/
+src-tauri/gen/schemas/
+src-tauri/resources/WebView2Loader.dll
+.toolchain/
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+# Local-only toolchain / build caches / install-test artifacts
+.cargo/
+.dsh/
+.install-test/
+.test-install/
+release-packages/

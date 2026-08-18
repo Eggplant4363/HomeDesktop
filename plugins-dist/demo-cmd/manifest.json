@@ -1,0 +1,28 @@
+{
+  "id": "dev.homedesktop.demo-installed",
+  "name": "安装示例（打开 GitHub）",
+  "version": "2.0.0",
+  "type": "icon",
+  "emoji": "🧰",
+  "sizes": [{ "w": 1, "h": 1 }],
+  "settings": [
+    {
+      "key": "url",
+      "label": "打开地址",
+      "type": "text",
+      "default": "https://github.com"
+    },
+    {
+      "key": "autoOpen",
+      "label": "点击自动打开",
+      "type": "toggle",
+      "default": true
+    }
+  ],
+  "actions": [
+    {
+      "kind": "command",
+      "cmd": "start https://github.com"
+    }
+  ]
+}

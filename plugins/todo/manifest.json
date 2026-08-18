@@ -1,0 +1,10 @@
+{
+  "id": "dev.homedesktop.todo",
+  "name": "待办清单",
+  "version": "1.0.0",
+  "type": "widget",
+  "emoji": "✅",
+  "widgetComponent": "todo",
+  "actions": [],
+  "sizes": [{ "w": 2, "h": 2 }, { "w": 4, "h": 2 }]
+}

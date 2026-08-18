@@ -1,0 +1,13 @@
+{
+  "id": "dev.homedesktop.system-apps",
+  "name": "系统应用",
+  "version": "1.0.0",
+  "type": "icon",
+  "emoji": "📱",
+  "sizes": [{ "w": 1, "h": 1 }],
+  "actions": [
+    {
+      "kind": "system_apps"
+    }
+  ]
+}

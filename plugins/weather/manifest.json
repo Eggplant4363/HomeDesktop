@@ -1,0 +1,32 @@
+{
+  "id": "dev.homedesktop.weather",
+  "name": "天气",
+  "version": "0.2.0",
+  "type": "widget",
+  "emoji": "🌤️",
+  "widgetComponent": "weather",
+  "sizes": [
+    { "w": 2, "h": 1 },
+    { "w": 2, "h": 2 },
+    { "w": 4, "h": 2 }
+  ],
+  "settings": [
+    {
+      "key": "city",
+      "label": "城市",
+      "type": "text",
+      "default": "北京"
+    },
+    {
+      "key": "unit",
+      "label": "温度单位",
+      "type": "select",
+      "options": [
+        { "label": "摄氏度 (°C)", "value": "celsius" },
+        { "label": "华氏度 (°F)", "value": "fahrenheit" }
+      ],
+      "default": "celsius"
+    }
+  ],
+  "actions": []
+}

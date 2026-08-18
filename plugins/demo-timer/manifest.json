@@ -1,0 +1,16 @@
+{
+  "id": "dev.homedesktop.demo-timer",
+  "name": "倒计时（示例）",
+  "version": "1.0.0",
+  "type": "widget",
+  "emoji": "⏱️",
+  "widgetComponent": "__plugin__",
+  "widgetFile": "widget.js",
+  "widgetElement": "hd-timer-widget",
+  "actions": [],
+  "sizes": [{ "w": 2, "h": 1 }, { "w": 2, "h": 2 }],
+  "settings": [
+    { "key": "target", "label": "目标秒数", "type": "number", "default": 60 },
+    { "key": "enableNotify", "label": "到点通知", "type": "toggle", "default": true }
+  ]
+}

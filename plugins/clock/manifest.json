@@ -1,0 +1,28 @@
+{
+  "id": "dev.homedesktop.clock",
+  "name": "时钟",
+  "version": "0.2.0",
+  "type": "widget",
+  "emoji": "🕐",
+  "widgetComponent": "clock",
+  "sizes": [
+    { "w": 2, "h": 1 },
+    { "w": 2, "h": 2 },
+    { "w": 4, "h": 2 }
+  ],
+  "settings": [
+    {
+      "key": "showSeconds",
+      "label": "显示秒",
+      "type": "toggle",
+      "default": true
+    },
+    {
+      "key": "showDate",
+      "label": "显示日期",
+      "type": "toggle",
+      "default": true
+    }
+  ],
+  "actions": []
+}

@@ -1,0 +1,10 @@
+{
+  "id": "dev.homedesktop.sysmonitor",
+  "name": "系统监控",
+  "version": "1.0.0",
+  "type": "widget",
+  "emoji": "📊",
+  "widgetComponent": "sysmonitor",
+  "actions": [],
+  "sizes": [{ "w": 2, "h": 1 }, { "w": 2, "h": 2 }]
+}

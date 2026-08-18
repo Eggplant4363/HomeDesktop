@@ -1,0 +1,14 @@
+{
+  "id": "dev.homedesktop.demo-web",
+  "name": "打开 GitHub（演示）",
+  "version": "0.2.0",
+  "type": "icon",
+  "emoji": "🌐",
+  "sizes": [{ "w": 1, "h": 1 }],
+  "actions": [
+    {
+      "kind": "command",
+      "cmd": "start https://github.com"
+    }
+  ]
+}

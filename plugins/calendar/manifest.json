@@ -1,0 +1,10 @@
+{
+  "id": "dev.homedesktop.calendar",
+  "name": "日历",
+  "version": "1.0.0",
+  "type": "widget",
+  "emoji": "📅",
+  "widgetComponent": "calendar",
+  "actions": [],
+  "sizes": [{ "w": 2, "h": 2 }, { "w": 4, "h": 2 }]
+}

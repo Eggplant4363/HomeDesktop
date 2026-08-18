@@ -1,0 +1,13 @@
+HomeDesktop 插件 v2 示例：倒计时小组件（自定义元素）
+
+内容：
+- manifest.json：声明 widgetFile（插件自带 JS）与 widgetElement（自定义元素标签名）
+- widget.js：自定义元素定义（shadow DOM 自带样式；通过 window.__homedesktopPlugin 读写实例设置）
+- 本文件：说明
+
+用法：
+1. 应用内 ＋ → 📦 从 zip 安装插件… 选择本包
+2. 添加「倒计时（示例）」小组件到桌面 → 显示 mm:ss 倒计时
+3. 编辑模式点 ⚙ → 改"目标秒数" → 立即生效
+
+开发参考：完整文档见仓库 docs/PLUGIN_API.md（插件 v2 章节）。

@@ -1,0 +1,11 @@
+HomeDesktop 插件包示例（演示"从 zip 安装插件" + manifest v2 API）
+
+内容：
+- manifest.json：v2 完整示例
+  - sizes：声明图标尺寸档（1×1）
+  - settings：声明统一设置菜单（text 打开地址 / toggle 点击自动打开）
+  - actions：声明点击行为（command 打开 GitHub）
+- 本文件：随包附带的说明文件，安装后会一起解压到插件目录
+
+打包要求：zip 根目录必须包含 manifest.json。
+完整开发者 API 文档见仓库 docs/PLUGIN_API.md。

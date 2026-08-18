@@ -1,0 +1,18 @@
+# HomeDesktop 工作区
+# - src-tauri: Tauri 2 应用壳（依赖 homedesktop-core）
+# - crates/homedesktop-core: 纯逻辑核心（可独立单测，不依赖 tauri/WebView2）
+[workspace]
+members = ["src-tauri", "crates/homedesktop-core"]
+resolver = "2"
+
+# workspace 级 profile（成员包内的 profile 会被忽略，必须放根）
+[profile.dev]
+# w64devkit 缺少 libgcc_eh.a（SEH 展开库），dev 构建用 abort 避免展开符号
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

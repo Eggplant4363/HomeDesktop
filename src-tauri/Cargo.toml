@@ -1,0 +1,40 @@
+[package]
+name = "homedesktop"
+version = "0.1.0"
+description = "Cross-platform desktop launcher & smart-home dashboard (HomeDesktop)"
+authors = ["HomeDesktop Contributors"]
+edition = "2021"
+
+[lib]
+name = "homedesktop_lib"
+# 桌面目标仅需 rlib（bin 目标链接生成 exe）。
+# 注意：GNU 工具链下 cdylib 导出表会触发 "export ordinal too large"（WebView2 符号）；
+# 移动端（iOS/Android）需要 staticlib/cdylib 时再加回。
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zip = "2"
+winreg = "0.55"
+base64 = "0.22"
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_System_Com",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_Graphics_Gdi",
+  "Win32_Storage_FileSystem",
+] }
+homedesktop-core = { path = "../crates/homedesktop-core" }
+
