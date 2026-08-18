@@ -1,6 +1,6 @@
 // 全局状态（Svelte 5 runes 模块）
 import type { Cell, IconCell, Layout, PluginInfo } from "./types";
-import { cellRect, findFreeSlot, FOLDER_COLS, PAGE_COLS, rectsOverlap } from "./layout";
+import { activePageCols, cellRect, findFreeSlot, FOLDER_COLS, rectsOverlap } from "./layout";
 
 export const plugins = $state<PluginInfo[]>([]);
 export const layout = $state<Layout>({ version: 3, pages: [[]] });
@@ -50,7 +50,7 @@ export function setLayout(next: Layout): void {
 export function addCell(cell: Cell, page = currentPage.index): void {
   if (!layout.pages[page]) layout.pages[page] = [];
   const cells = layout.pages[page];
-  const slot = findFreeSlot(cells.map(cellRect), PAGE_COLS, 1, 1);
+  const slot = findFreeSlot(cells.map(cellRect), activePageCols, 1, 1);
   cells.push({ ...cloneCell(cell), x: slot.x, y: slot.y });
 }
 
@@ -70,7 +70,7 @@ export function setCellPosition(
 ): boolean {
   const targetArr = layout.pages[page];
   if (!targetArr) return false;
-  const sx = Math.max(0, Math.min(PAGE_COLS - 1, Math.round(x)));
+  const sx = Math.max(0, Math.min(activePageCols - 1, Math.round(x)));
   const sy = Math.max(0, Math.round(y));
 
   let fromPage = -1;
@@ -430,7 +430,7 @@ export function moveCellAcrossPages(dragId: string, x: number, y: number): boole
   if (!targetArr) return false;
 
   const [cell] = layout.pages[fromPage].splice(fromIndex, 1);
-  const sx = Math.max(0, Math.min(PAGE_COLS - 1, Math.round(x)));
+  const sx = Math.max(0, Math.min(activePageCols - 1, Math.round(x)));
   const sy = Math.max(0, Math.round(y));
   cell.x = sx;
   cell.y = sy;

@@ -50,12 +50,10 @@
   import { getWidgetDef } from "./widgets";
   import {
     autostartEnabled,
-    getFullscreenPref,
     getSearchShortcut,
     getToggleShortcut,
     pickWallpaperImage,
     setAutostart,
-    setFullscreenPref,
     setSearchShortcut,
     setToggleShortcut,
   } from "./core/system";
@@ -76,8 +74,6 @@
   let showSystemApps = $state(false);
   /** 触发面板的「系统应用」槽位图标 id（选中应用后原位替换它） */
   let systemAppsSource = $state<string | null>(null);
-  /** 全屏 Pad 状态（M6：与窗口真实状态同步，供 ⛶ 按钮/Esc 使用） */
-  let isFullscreen = $state(false);
   /** Pad 开关快捷键（M7，可配置，默认 alt+space） */
   let padShortcut = $state("alt+space");
   /** 搜索唤起快捷键（M10，可配置，默认 ctrl+space） */
@@ -163,20 +159,9 @@
     autoStart = await autostartEnabled();
     void loadProxy();
 
-    // ---------- 全屏 Pad（M6） ----------
+    // ---------- 全屏模式（仅全屏，无窗口模式） ----------
     const win = getCurrentWindow();
-    // 窗口尺寸变化（含全屏切换，热键由 Rust 触发时也走这里）→ 同步状态并记忆
-    win.onResized(() => {
-      void refreshFullscreen();
-    });
-    isFullscreen = await win.isFullscreen();
-    // 记忆上次状态：上次全屏 → 启动直接进全屏 Pad
-    if (await getFullscreenPref()) {
-      await win.setFullscreen(true);
-      isFullscreen = true;
-      log.info("启动即全屏 Pad（记忆上次状态）");
-    }
-    // Esc 退出全屏（回窗口模式）
+    await win.setFullscreen(true);
     window.addEventListener("keydown", handleGlobalKeydown);
 
     // ---------- 快捷键（M7/M10） ----------
@@ -194,40 +179,9 @@
     );
   });
 
-  /** 全屏状态与窗口同步（变化时写入记忆配置） */
-  async function refreshFullscreen(): Promise<void> {
-    try {
-      const v = await getCurrentWindow().isFullscreen();
-      if (v !== isFullscreen) {
-        isFullscreen = v;
-        void setFullscreenPref(v);
-      }
-    } catch (e) {
-      console.error("[homedesktop] refresh fullscreen failed:", e);
-    }
-  }
-
-  function handleGlobalKeydown(e: KeyboardEvent): void {
-    // 全屏 Pad 中按 Esc → 退出全屏（回到窗口模式）
-    if (e.key === "Escape" && isFullscreen) {
-      e.preventDefault();
-      void handleToggleFullscreen();
-    }
-  }
-
-  /** 顶栏 ⛶：窗口模式 ⇄ 全屏 Pad（窗口保持可见） */
-  async function handleToggleFullscreen(): Promise<void> {
-    try {
-      const win = getCurrentWindow();
-      const next = !(await win.isFullscreen());
-      await win.setFullscreen(next);
-      isFullscreen = next;
-      await setFullscreenPref(next);
-      log.info(`全屏 Pad: ${next ? "进入" : "退出"}`);
-    } catch (e) {
-      log.error(`全屏切换失败: ${e}`);
-      toast(String(e));
-    }
+  /** 全屏模式下按键处理（仅保留需要的键） */
+  function handleGlobalKeydown(_e: KeyboardEvent): void {
+    // 仅全屏模式：无窗口模式，Esc 不再退出全屏
   }
 
   /** 保存"显示/隐藏 Pad"快捷键（M7）；返回错误信息（null = 成功） */
@@ -795,11 +749,6 @@
     {/if}
     <button class="icon-btn" title="外观设置" onclick={() => (showSettings = !showSettings)}>⚙</button>
     <button class="icon-btn" title="添加图标/小组件" onclick={() => (showAdd = !showAdd)}>＋</button>
-    <button
-      class="icon-btn"
-      title={isFullscreen ? "退出全屏（Esc）" : "全屏 Pad"}
-      onclick={() => void handleToggleFullscreen()}
-    >⛶</button>
   </header>
 
   {#if error}

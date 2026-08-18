@@ -7,7 +7,7 @@
   import { enterEditMode, plugins, ui } from "../core/stores.svelte";
   import { appearance } from "../core/appearance.svelte";
   import { filterCells } from "../core/search";
-  import { cellRect, findFreeSlot, PAGE_COLS } from "../core/layout";
+  import { cellRect, findFreeSlot, PAGE_COLS, setActivePageCols } from "../core/layout";
 
   let {
     cells,
@@ -54,6 +54,9 @@
   let gap = $state(16);
   const PAD = 6;
   const SLOT = $derived(tile + gap);
+
+  /** 当前窗口能放下的最小列数（Grid 按宽度计算，同步到 stores 供自动找空位使用） */
+  let cols = $state(PAGE_COLS);
 
   let dragging = false;
   let draggingId = $state<string | null>(null);
@@ -103,7 +106,7 @@
     return h * tile + (h - 1) * gap;
   }
 
-  const canvasW = $derived(PAGE_COLS * tile + (PAGE_COLS - 1) * gap + PAD * 2);
+  const canvasW = $derived(cols * tile + (cols - 1) * gap + PAD * 2);
   const canvasH = $derived.by(() => {
     let max = 0;
     for (const cell of cells) {
@@ -117,7 +120,7 @@
   /** ＋ 新增按钮位置：页面上首个空位 */
   const addPos = $derived(
     queryText === ""
-      ? findFreeSlot(cells.map(cellRect), PAGE_COLS, 1, 1)
+      ? findFreeSlot(cells.map(cellRect), cols, 1, 1)
       : null,
   );
 
@@ -128,12 +131,21 @@
     const g = parseFloat(style.getPropertyValue("--gap"));
     if (Number.isFinite(t) && t > 0) tile = t;
     if (Number.isFinite(g) && g >= 0) gap = g;
+    // 按窗口宽度计算能放下的最小列数（画布恰好铺满，图标不被裁）
+    const c = Math.max(1, Math.floor((gridEl.clientWidth - PAD * 2) / SLOT));
+    if (c !== cols) {
+      cols = c;
+      setActivePageCols(c);
+    }
   }
 
-  // 首次挂载与图标大小变化时重新度量（tile/gap 用于画布尺寸与拖拽吸附计算）
+  // 首次挂载、图标大小变化、窗口尺寸变化时重新度量（tile/gap/列数用于画布与吸附计算）
   $effect(() => {
     void appearance.tileSize;
     measure();
+    const onResize = () => measure();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   });
 
   function onPointerDown(e: PointerEvent): void {
@@ -257,7 +269,7 @@
     const tx = Math.round((x - rect.left - PAD - (w * slot) / 2) / slot);
     const ty = Math.round((y - rect.top - PAD - (h * slot) / 2) / slot);
     dragSlot = {
-      x: Math.max(0, Math.min(PAGE_COLS - w, tx)),
+      x: Math.max(0, Math.min(cols - w, tx)),
       y: Math.max(0, ty),
       w,
       h,
@@ -401,7 +413,7 @@
     position: relative;
     height: 100%;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: auto; /* 极端窄窗口兜底：允许横向滚动查看 */
     touch-action: pan-y; /* 触屏：纵向滚动交给浏览器，长按/横向由应用处理 */
     /* 容器 tabindex=-1 可被点击聚焦；按键后 Chromium 会画默认黑色 focus ring → 禁用 */
     outline: none;

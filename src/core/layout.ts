@@ -1,9 +1,15 @@
 // 自由摆放（v3）：页面虚拟网格常量与几何工具（与 homedesktop-core 的 PAGE_COLS/FOLDER_COLS 一致）
 
-/** 主页面虚拟列数 */
+/** 主页面虚拟列数（默认/迁移用） */
 export const PAGE_COLS = 12;
 /** 文件夹内虚拟列数 */
 export const FOLDER_COLS = 6;
+
+/** 当前主页面实际列数：Grid 按窗口宽度计算后同步（能放下的最小列数）；默认 12 */
+export let activePageCols = PAGE_COLS;
+export function setActivePageCols(n: number): void {
+  if (Number.isInteger(n) && n >= 1) activePageCols = n;
+}
 
 export interface Rect {
   x: number;
