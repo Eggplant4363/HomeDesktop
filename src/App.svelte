@@ -1278,7 +1278,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 30;
+    /* App 级弹层（设置/确认框/导入模式等）必须盖过组件级弹层
+       （插件管理 55、搜索 60、插件设置 45、添加菜单 40）——确认框不能出现在后面 */
+    z-index: 100;
   }
   .move-menu {
     width: 280px;
