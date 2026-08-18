@@ -448,7 +448,13 @@
           persist();
           await loadPlugins();
           log.info(`插件已卸载: ${pluginId}（清理桌面图标 ${removed} 个）`);
-          toast(`插件「${name}」已卸载`);
+          // dev 环境：项目 plugins/ 或资源目录里可能有同名插件 → 卸载后列表仍显示（内置标记）
+          const stillThere = plugins.some((p) => p.id === pluginId);
+          toast(
+            stillThere
+              ? `「${name}」用户副本已卸载（开发目录仍有同名内置插件）`
+              : `插件「${name}」已卸载`,
+          );
         } catch (e) {
           log.error(`插件卸载失败: ${pluginId} -> ${e}`);
           toast(`卸载失败：${e}`, 4000);

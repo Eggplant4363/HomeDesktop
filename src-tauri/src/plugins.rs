@@ -337,10 +337,24 @@ struct RemoteIndexItem {
     description: Option<String>,
 }
 
-/// 拉取在线市场索引（默认指向 GitHub 仓库的 market/index.json）
+/// 下载进度（经 IPC Channel 推送给前端，用于在线安装进度条）
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadProgress {
+    /// 插件包文件名
+    pub file: String,
+    /// 已下载字节数
+    pub received: u64,
+    /// 总字节数（无 Content-Length 时为 None，前端显示不确定进度）
+    pub total: Option<u64>,
+}
+
+/// 拉取在线市场索引（异步：下载在阻塞线程池执行，不卡 UI）
 #[tauri::command]
-pub fn market_remote_list(app: AppHandle, url: String) -> Result<RemoteMarket, String> {
-    let body = fetch_text(&url)?;
+pub async fn market_remote_list(app: AppHandle, url: String) -> Result<RemoteMarket, String> {
+    let body = tauri::async_runtime::spawn_blocking(move || fetch_text(&url))
+        .await
+        .map_err(|e| format!("索引拉取任务失败: {e}"))??;
     let index: RemoteIndex =
         serde_json::from_str(&body).map_err(|e| format!("索引 JSON 解析失败: {e}"))?;
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -365,34 +379,46 @@ pub fn market_remote_list(app: AppHandle, url: String) -> Result<RemoteMarket, S
     })
 }
 
-/// 从在线市场下载 zip 并安装（下载到本地 market/ 后走 plugins_install 同一条安装链路）
+/// 从在线市场下载 zip 并安装（异步 + 进度推送；下载在阻塞线程池执行，不卡 UI）
 #[tauri::command]
-pub fn market_remote_install(
+pub async fn market_remote_install(
     app: AppHandle,
     base: String,
     file: String,
+    on_progress: tauri::ipc::Channel<DownloadProgress>,
 ) -> Result<PluginInfo, String> {
     // 文件名防穿越：只允许普通文件名
     let file_name = std::path::Path::new(&file)
         .file_name()
         .and_then(|s| s.to_str())
         .filter(|s| s.ends_with(".zip") && !s.contains('/') && !s.contains('\\'))
-        .ok_or_else(|| "非法的插件包文件名".to_string())?;
+        .ok_or_else(|| "非法的插件包文件名".to_string())?
+        .to_string();
 
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let market_dir = data_dir.join("market");
     std::fs::create_dir_all(&market_dir).map_err(|e| e.to_string())?;
-    let zip_path = market_dir.join(file_name);
+    let zip_path = market_dir.join(&file_name);
 
-    let url = format!("{}{}", base.trim_end_matches('/'), file_name);
+    // 修复：base 可能带/不带结尾斜杠，统一保证只有一个分隔符
+    let url = format!("{}/{}", base.trim_end_matches('/'), file_name);
     crate::log::info(&format!("在线市场下载: {url}"));
-    download_to(&url, &zip_path)?;
-    crate::log::info(&format!("下载完成: {} ({} bytes)", file_name, zip_path.metadata().map(|m| m.len()).unwrap_or(0)));
 
-    // 复用本地安装逻辑（校验 manifest + 解压到 plugins/<id>/）
-    let installed = plugins_install(app, zip_path.to_string_lossy().into_owned())?;
-    crate::log::info(&format!("在线市场安装成功: {} v{}", installed.name, installed.version));
-    Ok(installed)
+    let result = tauri::async_runtime::spawn_blocking(move || -> Result<PluginInfo, String> {
+        download_to_with_progress(&url, &zip_path, &on_progress)?;
+        crate::log::info(&format!(
+            "下载完成: {} ({} bytes)",
+            file_name,
+            zip_path.metadata().map(|m| m.len()).unwrap_or(0)
+        ));
+        // 复用本地安装逻辑（校验 manifest + 解压到 plugins/<id>/）
+        plugins_install(app, zip_path.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| format!("下载任务失败: {e}"))??;
+
+    crate::log::info(&format!("在线市场安装成功: {} v{}", result.name, result.version));
+    Ok(result)
 }
 
 /// GET 文本（超时 30s）
@@ -404,18 +430,48 @@ fn fetch_text(url: &str) -> Result<String, String> {
     resp.into_string().map_err(|e| format!("读取响应失败: {e}"))
 }
 
-/// 下载到本地文件（最多 64MB，防异常大包）
-fn download_to(url: &str, dest: &std::path::Path) -> Result<(), String> {
+/// 下载到本地文件并推送进度（最多 64MB，防异常大包）
+fn download_to_with_progress(
+    url: &str,
+    dest: &std::path::Path,
+    progress: &tauri::ipc::Channel<DownloadProgress>,
+) -> Result<(), String> {
     use std::io::Read;
+    use std::io::Write;
     const MAX: u64 = 64 * 1024 * 1024;
+    const CHUNK: usize = 64 * 1024;
+    let file_name = dest
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+
     let resp = ureq::get(url)
         .timeout(std::time::Duration::from_secs(60))
         .call()
         .map_err(|e| format!("下载失败: {e}"))?;
+    let total = resp
+        .header("Content-Length")
+        .and_then(|v| v.parse::<u64>().ok());
+
     let mut reader = resp.into_reader().take(MAX + 1);
     let mut out = std::fs::File::create(dest).map_err(|e| format!("写文件失败: {e}"))?;
-    let copied = std::io::copy(&mut reader, &mut out).map_err(|e| format!("下载中断: {e}"))?;
-    if copied > MAX {
+    let mut received: u64 = 0;
+    let mut buf = vec![0u8; CHUNK];
+    loop {
+        let n = reader.read(&mut buf).map_err(|e| format!("下载中断: {e}"))?;
+        if n == 0 {
+            break;
+        }
+        out.write_all(&buf[..n]).map_err(|e| format!("写文件失败: {e}"))?;
+        received += n as u64;
+        // 推送进度（发送失败不影响下载）
+        let _ = progress.send(DownloadProgress {
+            file: file_name.clone(),
+            received,
+            total,
+        });
+    }
+    if received > MAX {
         let _ = std::fs::remove_file(dest);
         return Err("插件包超过 64MB 限制".to_string());
     }

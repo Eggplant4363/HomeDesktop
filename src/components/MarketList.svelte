@@ -2,8 +2,9 @@
   // 插件市场：本地（market/*.zip 目录） + 在线（远程仓库，M18）
   // 在线市场默认走 jsDelivr CDN（raw.githubusercontent 在国内网络常不可达）；
   // 可用配置项 plugin.marketUrl 覆盖为其他索引地址（zip 下载地址自动跟随索引目录）。
+  // 在线安装为异步任务（Rust spawn_blocking），经 IPC Channel 推送下载进度，不阻塞 UI。
   import { onMount } from "svelte";
-  import { invoke } from "@tauri-apps/api/core";
+  import { Channel, invoke } from "@tauri-apps/api/core";
   import { installPlugin, loadPlugins } from "../core/pluginLoader";
   import type { MarketItem, RemoteMarket, RemoteMarketItem } from "../core/types";
   import { log } from "../core/logger";
@@ -25,6 +26,10 @@
   let error = $state("");
   let loading = $state(false);
   let indexUrl = $state(DEFAULT_INDEX_URL);
+  /** 正在在线安装的插件 id（进度显示用） */
+  let installing = $state<string | null>(null);
+  /** 下载进度（total 为 null 表示未知长度 → 不确定进度） */
+  let progress = $state<{ received: number; total: number | null } | null>(null);
 
   /** 读取配置覆盖（plugin.marketUrl），失败保持默认 */
   async function loadIndexUrl(): Promise<void> {
@@ -81,10 +86,18 @@
   }
 
   async function installRemote(item: RemoteMarketItem): Promise<void> {
+    if (installing) return; // 防连点
+    installing = item.id;
+    progress = null;
     try {
+      const ch = new Channel<{ file: string; received: number; total: number | null }>();
+      ch.onmessage = (p) => {
+        progress = { received: p.received, total: p.total };
+      };
       const installed = await invoke<{ name: string; version: string }>("market_remote_install", {
         base: zipBase(),
         file: item.file,
+        onProgress: ch,
       });
       await loadPlugins();
       await refresh();
@@ -94,6 +107,9 @@
     } catch (e) {
       log.error(`在线安装失败: ${item.file} -> ${e}`);
       onmessage?.(`在线安装失败：${e}`, true);
+    } finally {
+      installing = null;
+      progress = null;
     }
   }
 
@@ -166,7 +182,15 @@
           <span class="ver">
             v{m.version}{#if m.size}({(m.size / 1024).toFixed(0)}KB){/if}
           </span>
-          {#if m.installed}
+          {#if installing === m.id}
+            <span class="tag installing">
+              {#if progress?.total}
+                安装中 {(Math.min(1, progress.received / progress.total) * 100).toFixed(0)}%
+              {:else}
+                安装中…
+              {/if}
+            </span>
+          {:else if m.installed}
             <span class="tag installed">已安装</span>
           {:else}
             <button class="install-btn" onclick={() => void installRemote(m)}>安装</button>
@@ -287,6 +311,9 @@
   }
   .tag.installed {
     background: var(--fg-dim);
+  }
+  .tag.installing {
+    background: #e6a23c;
   }
   .install-btn {
     border: none;
