@@ -1,3 +1,12 @@
+## 2026-02-13（在线插件市场：GitHub 仓库拉取安装）✅
+
+- **需求**（用户提出）：插件市场建一个 GitHub 仓库（HomeDesktopPlugins），应用可以从仓库下载插件。
+- **实现**：
+  - 新仓库 **https://github.com/Eggplant4363/HomeDesktopPlugins**（公开）：market/index.json 索引 + 插件 zip 包（demo-timer / demo-cmd）
+  - 后端：新增 market_remote_list(url)（拉取索引，标记已安装）+ market_remote_install(base, file)（下载 zip 到本地 market/ 后复用安装链路；64MB 上限、文件名防穿越）；HTTP 客户端用 **ureq 2**
+  - 前端：MarketList 拆为 **本地市场 / 在线市场** 双页签；在线页签一键安装
+  - **网络适配**：raw.githubusercontent.com 在国内网络不可达（实测 000）→ 默认索引走 **jsDelivr CDN**（实测 200）；zip base 自动跟随索引目录；支持配置 plugin.marketUrl 覆盖
+- **验证**：cargo check 通过；svelte-check 0 错误 0 警告；vitest 83/83；jsDelivr 索引与两个 zip 均 200
 ## 2026-02-13（发布 v0.1.0 Release）✅
 
 - **发布**：打标签 0.1.0 → workflow 新增标签触发 + release 任务（softprops/action-gh-release），三平台构建后自动创建**草稿 Release**

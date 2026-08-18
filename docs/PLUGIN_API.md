@@ -230,6 +230,10 @@ const city = $derived(peekCellSetting<string>(instanceId, "com.example.myplugin"
 - **开发调试**：把插件目录放进项目根 `plugins/`，`pnpm tauri dev` 启动即被扫描（重启应用刷新）。
 - **打包分发**：把插件目录打成 **zip**（**zip 根目录必须包含 `manifest.json`**；可附带说明/资源文件，会一起解压）→ 用户应用内 **＋ → 📦 从 zip 安装插件…** 选择 zip 即可。安装到用户数据目录 `plugins/<id>/`，自动出现在列表中。
   - 示例安装包：`plugins-dist/demo-cmd-2.0.0.zip`（图标类：manifest + 说明.txt，演示 `sizes`/`settings`）、`plugins-dist/demo-timer-1.0.0.zip`（**自带小组件**：manifest + widget.js，演示 `widgetFile`/`widgetElement`）
+- **在线市场（M18）**：应用「插件管理 → 市场 → 在线市场」从远程仓库拉取安装。仓库结构：
+  - `market/index.json`：索引（`base` = zip 下载基础 URL，`plugins[]` = 插件元数据）
+  - `market/*.zip`：插件安装包
+  - 官方仓库：`github.com/Eggplant4363/HomeDesktopPlugins`；默认经 **jsDelivr CDN** 访问（国内网络直连 raw.githubusercontent 不可达）；可用配置项 `plugin.marketUrl` 覆盖索引地址（zip 下载地址自动跟随索引目录）
 - 校验规则：manifest 缺少 `id`/`name` 或 JSON 非法 → 安装失败并提示；扫描到非法插件目录只跳过并告警，不影响应用。
 
 ## 7. 完整示例
