@@ -286,6 +286,12 @@
     overflow-y: auto;
     padding: 4px;
     touch-action: pan-y; /* 触屏：纵向滚动交给浏览器，长按/横向由应用处理 */
+    /* 容器 tabindex=-1 可被点击聚焦；按键后 Chromium 会画默认黑色 focus ring → 禁用 */
+    outline: none;
+  }
+  .grid:focus,
+  .grid:focus-visible {
+    outline: none;
   }
   .cell-wrap {
     position: relative;
