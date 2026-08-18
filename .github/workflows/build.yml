@@ -48,7 +48,19 @@ jobs:
         if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      # WebView2Loader.dll：exe 静态导入该 DLL（见 src-tauri/nsis-hooks.nsh），
+      # 但它是二进制不入库 → Windows 构建前从 NuGet 拉取（Microsoft.Web.WebView2 包）
+      - name: Download WebView2Loader.dll (Windows only)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          $pkg = Join-Path $env:RUNNER_TEMP "webview2.zip"
+          Invoke-WebRequest -Uri "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.2903.40" -OutFile $pkg
+          Expand-Archive -Path $pkg -DestinationPath (Join-Path $env:RUNNER_TEMP "webview2") -Force
+          New-Item -ItemType Directory -Force -Path "src-tauri/resources" | Out-Null
+          Copy-Item (Join-Path $env:RUNNER_TEMP "webview2\runtimes\win-x64\native\WebView2Loader.dll") "src-tauri\resources\WebView2Loader.dll" -Force
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
