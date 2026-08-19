@@ -221,8 +221,10 @@
   /** 隐藏本应用窗口（启动外部应用/网页后、或点击空白区域时；Alt+Space/托盘可再唤出） */
   function hideWindow(): void {
     const win = getCurrentWindow();
-    void win.hide();
-    log.info("隐藏应用窗口");
+    win
+      .hide()
+      .then(() => log.info("隐藏应用窗口"))
+      .catch((e) => log.error(`隐藏窗口失败: ${e}`));
   }
 
   /** 搜索面板：启动桌面图标（含 system_apps 拦截）/ 打开文件夹 */
