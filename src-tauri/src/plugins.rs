@@ -225,18 +225,59 @@ fn extract_html_title(html: &str) -> Option<String> {
 }
 
 /// 获取网页声明的图标 URL（解析 `<link rel="icon|shortcut icon|apple-touch-icon">` 并转绝对地址）。
-/// 失败/未声明返回 None（前端再兜底 /favicon.ico 等）。
+/// 获取网页图标为 **data URL**（WebView 加载远程图不跳过证书校验，自签证书站点
+/// 的图标必须在 Rust 侧免校验抓取后转 data: 才能显示）。失败返回 None → 前端回退 emoji。
 #[tauri::command]
 pub fn web_fetch_icon(url: String) -> Result<Option<String>, String> {
-    let resp = fetch_agent()
-        .get(&url)
+    use std::io::Read;
+    const MAX_ICON: usize = 300 * 1024;
+
+    let agent = fetch_agent();
+    // 1) 拉页面 → 找声明的图标 URL（优先 link rel=icon，其次 /favicon.ico、/favicon.png）
+    let icon_url = {
+        let resp = agent
+            .get(&url)
+            .set("User-Agent", FETCH_UA)
+            .timeout(std::time::Duration::from_secs(8))
+            .call()
+            .map_err(|e| format!("请求失败: {e}"))?;
+        let mut body = resp.into_string().map_err(|e| e.to_string())?;
+        body.truncate(512 * 1024);
+        extract_html_icon(&body, &url)
+            .or_else(|| resolve_url(&url, "/favicon.ico"))
+            .or_else(|| resolve_url(&url, "/favicon.png"))
+    };
+    let Some(icon_url) = icon_url else { return Ok(None) };
+
+    // 2) 抓取图标字节（免证书校验）→ data URL
+    let resp = agent
+        .get(&icon_url)
         .set("User-Agent", FETCH_UA)
         .timeout(std::time::Duration::from_secs(8))
         .call()
         .map_err(|e| format!("请求失败: {e}"))?;
-    let mut body = resp.into_string().map_err(|e| e.to_string())?;
-    body.truncate(512 * 1024);
-    Ok(extract_html_icon(&body, &url))
+    let ctype = resp
+        .header("Content-Type")
+        .unwrap_or("image/x-icon")
+        .split(';')
+        .next()
+        .unwrap_or("image/x-icon")
+        .trim()
+        .to_string();
+    if !ctype.starts_with("image/") {
+        return Ok(None);
+    }
+    let mut bytes: Vec<u8> = Vec::new();
+    resp.into_reader()
+        .take((MAX_ICON + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("图标读取失败: {e}"))?;
+    if bytes.is_empty() || bytes.len() > MAX_ICON {
+        return Ok(None);
+    }
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Ok(Some(format!("data:{ctype};base64,{b64}")))
 }
 
 /// 抓取用的浏览器 UA（部分站点对非浏览器 UA 返回 403）
