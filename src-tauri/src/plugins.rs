@@ -189,7 +189,9 @@ fn resolve_placeholders(
 /// 获取网页标题（网页快捷方式：图标标签自动显示站点标题）。失败/无标题返回 None。
 #[tauri::command]
 pub fn web_fetch_title(url: String) -> Result<Option<String>, String> {
-    let resp = ureq::get(&url)
+    let resp = fetch_agent()
+        .get(&url)
+        .set("User-Agent", FETCH_UA)
         .timeout(std::time::Duration::from_secs(8))
         .call()
         .map_err(|e| format!("请求失败: {e}"))?;
@@ -226,13 +228,71 @@ fn extract_html_title(html: &str) -> Option<String> {
 /// 失败/未声明返回 None（前端再兜底 /favicon.ico 等）。
 #[tauri::command]
 pub fn web_fetch_icon(url: String) -> Result<Option<String>, String> {
-    let resp = ureq::get(&url)
+    let resp = fetch_agent()
+        .get(&url)
+        .set("User-Agent", FETCH_UA)
         .timeout(std::time::Duration::from_secs(8))
         .call()
         .map_err(|e| format!("请求失败: {e}"))?;
     let mut body = resp.into_string().map_err(|e| e.to_string())?;
     body.truncate(512 * 1024);
     Ok(extract_html_icon(&body, &url))
+}
+
+/// 抓取用的浏览器 UA（部分站点对非浏览器 UA 返回 403）
+const FETCH_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+
+/// 标题/图标抓取 agent：跳过证书校验（自签证书站点如 OpenWrt 路由器可访问）
+fn fetch_agent() -> ureq::Agent {
+    // 显式指定 ring provider（避免与 aws-lc-rs 同时启用导致进程级 provider 二义性 panic）
+    let provider = rustls::crypto::ring::default_provider();
+    let config = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(provider))
+        .with_safe_default_protocol_versions()
+        .expect("默认 TLS 版本可用")
+        .dangerous()
+        .with_custom_certificate_verifier(std::sync::Arc::new(AcceptAllVerifier))
+        .with_no_client_auth();
+    ureq::AgentBuilder::new()
+        .tls_config(std::sync::Arc::new(config))
+        .build()
+}
+
+/// 接受任意证书的验证器（仅用于标题/图标抓取）
+#[derive(Debug)]
+struct AcceptAllVerifier;
+
+impl rustls::client::danger::ServerCertVerifier for AcceptAllVerifier {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        rustls::crypto::ring::default_provider()
+            .signature_verification_algorithms
+            .supported_schemes()
+    }
 }
 
 /// 从 HTML 提取声明的图标地址（优先 apple-touch-icon > shortcut icon > icon），转绝对 URL
