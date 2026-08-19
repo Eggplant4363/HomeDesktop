@@ -81,6 +81,7 @@ pub fn run() {
             plugins::market_remote_list,
             plugins::market_remote_install,
             plugins::web_fetch_title,
+            plugins::web_fetch_icon,
             config::config_get,
             config::config_set,
             config::set_wallpaper,

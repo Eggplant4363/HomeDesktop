@@ -222,6 +222,80 @@ fn extract_html_title(html: &str) -> Option<String> {
     Some(collapsed.chars().take(60).collect())
 }
 
+/// 获取网页声明的图标 URL（解析 `<link rel="icon|shortcut icon|apple-touch-icon">` 并转绝对地址）。
+/// 失败/未声明返回 None（前端再兜底 /favicon.ico 等）。
+#[tauri::command]
+pub fn web_fetch_icon(url: String) -> Result<Option<String>, String> {
+    let resp = ureq::get(&url)
+        .timeout(std::time::Duration::from_secs(8))
+        .call()
+        .map_err(|e| format!("请求失败: {e}"))?;
+    let mut body = resp.into_string().map_err(|e| e.to_string())?;
+    body.truncate(512 * 1024);
+    Ok(extract_html_icon(&body, &url))
+}
+
+/// 从 HTML 提取声明的图标地址（优先 apple-touch-icon > shortcut icon > icon），转绝对 URL
+fn extract_html_icon(html: &str, page_url: &str) -> Option<String> {
+    let lower = html.to_lowercase();
+    for rel in ["apple-touch-icon", "shortcut icon", "icon"] {
+        if let Some(href) = find_link_href(&lower, html, rel) {
+            if let Some(abs) = resolve_url(page_url, &href) {
+                return Some(abs);
+            }
+        }
+    }
+    None
+}
+
+/// 在 HTML 里找第一个包含指定 rel 的 `<link>` 标签，提取其 href 值（大小写不敏感）
+fn find_link_href(lower: &str, html: &str, rel: &str) -> Option<String> {
+    let mut from = 0;
+    while let Some(li) = lower[from..].find("<link") {
+        let start = from + li;
+        let tag_end = lower[start..].find('>').map(|i| start + i).unwrap_or(lower.len());
+        if lower[start..tag_end].contains(rel) {
+            let tag = &html[start..tag_end];
+            if let Some(hi) = lower[start..tag_end].find("href=") {
+                let after = &tag[hi + 5..];
+                let first = after.chars().next();
+                let value: String = if first == Some('"') {
+                    let end = after[1..].find('"')?;
+                    after[1..=end].to_string()
+                } else if first == Some('\'') {
+                    let end = after[1..].find('\'')?;
+                    after[1..=end].to_string()
+                } else {
+                    after.split_whitespace().next()?.to_string()
+                };
+                if !value.is_empty() {
+                    return Some(value);
+                }
+            }
+        }
+        from = tag_end;
+    }
+    None
+}
+
+/// 相对 href → 绝对 URL（支持 // 协议相对、/ 根相对、裸相对）
+fn resolve_url(base: &str, href: &str) -> Option<String> {
+    let href = href.trim();
+    if href.starts_with("http://") || href.starts_with("https://") {
+        return Some(href.to_string());
+    }
+    let (scheme, rest) = base.split_once("://")?;
+    let host = rest.split(['/', '?', '#']).next()?;
+    let origin = format!("{scheme}://{host}");
+    if let Some(p) = href.strip_prefix("//") {
+        return Some(format!("{scheme}:{p}"));
+    }
+    if let Some(p) = href.strip_prefix('/') {
+        return Some(format!("{origin}/{p}"));
+    }
+    Some(format!("{origin}/{href}"))
+}
+
 /// 插件市场 MVP：从本地 zip 安装插件包（zip 内含 manifest.json + 可选资源）
 /// 解压到用户数据目录 plugins/<id>/，随后可被插件注册表发现
 #[tauri::command]
