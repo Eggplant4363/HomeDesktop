@@ -27,6 +27,7 @@
     onflipprev,
     onflipnext,
     onfitted,
+    onblankclick,
   }: {
     cells: Cell[];
     queryText?: string;
@@ -46,6 +47,8 @@
     onflipnext?: () => void;
     /** 画布适配调整了布局后回调（用于持久化） */
     onfitted?: () => void;
+    /** 点击空白区域（非编辑模式、非拖拽）→ 外层隐藏应用 */
+    onblankclick?: () => void;
   } = $props();
 
   // ---------- 拖拽（Pointer Events：鼠标移动即拖、触屏长按拾取；仅编辑模式可移动） ----------
@@ -224,6 +227,11 @@
       e.preventDefault();
       e.stopPropagation();
       suppressClick = false;
+      return;
+    }
+    // 点击空白区域（画布/网格背景，非图标）→ 隐藏应用（编辑模式/拖拽中不触发）
+    if (!ui.editMode && !dragging && (e.target === canvasEl || e.target === gridEl)) {
+      onblankclick?.();
     }
   }
 

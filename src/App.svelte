@@ -218,6 +218,13 @@
     showSearch = false;
   }
 
+  /** 隐藏本应用窗口（启动外部应用/网页后、或点击空白区域时；Alt+Space/托盘可再唤出） */
+  function hideWindow(): void {
+    const win = getCurrentWindow();
+    void win.hide();
+    log.info("隐藏应用窗口");
+  }
+
   /** 搜索面板：启动桌面图标（含 system_apps 拦截）/ 打开文件夹 */
   function handleSearchOpenIcon(cellId: string): void {
     closeSearch();
@@ -236,6 +243,7 @@
     try {
       await invoke("launch_path", { path });
       log.info(`搜索启动应用: ${path}`);
+      hideWindow();
     } catch (e) {
       log.error(`搜索启动应用失败: ${path} -> ${e}`);
       toast(String(e));
@@ -248,6 +256,7 @@
     try {
       await invoke("launch_action", { pluginId });
       log.info(`搜索启动插件: ${pluginId}`);
+      hideWindow();
     } catch (e) {
       log.error(`搜索启动插件失败: ${pluginId} -> ${e}`);
       toast(String(e));
@@ -375,10 +384,12 @@
       return;
     }
     log.info(`启动图标: ${cellId}`);
-    launchCell(cellId).catch((e) => {
-      log.error(`启动失败: ${cellId} -> ${e}`);
-      toast(String(e));
-    });
+    launchCell(cellId)
+      .then(() => hideWindow())
+      .catch((e) => {
+        log.error(`启动失败: ${cellId} -> ${e}`);
+        toast(String(e));
+      });
   }
 
   /** 选中应用：原位替换「系统应用」槽位图标（保持位置不变） */
@@ -1200,6 +1211,7 @@
         onflipprev={handlePrev}
         onflipnext={handleNext}
         onfitted={() => persist()}
+        onblankclick={hideWindow}
       />
     {/if}
   </section>
