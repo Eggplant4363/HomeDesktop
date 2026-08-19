@@ -196,8 +196,16 @@ pub fn web_fetch_title(url: String) -> Result<Option<String>, String> {
         .call()
         .map_err(|e| format!("请求失败: {e}"))?;
     let mut body = resp.into_string().map_err(|e| e.to_string())?;
-    body.truncate(512 * 1024); // 只解析前 512KB
+    truncate_utf8(&mut body, 512 * 1024); // 只解析前 512KB（字符边界安全截断）
     Ok(extract_html_title(&body))
+}
+
+/// 按字节上限截断字符串（保证不落在 UTF-8 字符中间，避免 truncate panic）
+fn truncate_utf8(s: &mut String, max_bytes: usize) {
+    if s.len() > max_bytes {
+        let cut = s.floor_char_boundary(max_bytes);
+        s.truncate(cut);
+    }
 }
 
 /// 从 HTML 提取 <title>（大小写不敏感、跨行、简单实体解码、折叠空白、限长 60 字符）
@@ -230,7 +238,8 @@ fn extract_html_title(html: &str) -> Option<String> {
 #[tauri::command]
 pub fn web_fetch_icon(url: String) -> Result<Option<String>, String> {
     use std::io::Read;
-    const MAX_ICON: usize = 300 * 1024;
+    // 上限 4MB（部分站点声明的图标是大图，如 cchong.cc 2.4MB）
+    const MAX_ICON: usize = 4 * 1024 * 1024;
 
     let agent = fetch_agent();
     // 1) 拉页面 → 找声明的图标 URL（优先 link rel=icon，其次 /favicon.ico、/favicon.png）
@@ -242,7 +251,7 @@ pub fn web_fetch_icon(url: String) -> Result<Option<String>, String> {
             .call()
             .map_err(|e| format!("请求失败: {e}"))?;
         let mut body = resp.into_string().map_err(|e| e.to_string())?;
-        body.truncate(512 * 1024);
+        truncate_utf8(&mut body, 512 * 1024);
         extract_html_icon(&body, &url)
             .or_else(|| resolve_url(&url, "/favicon.ico"))
             .or_else(|| resolve_url(&url, "/favicon.png"))
@@ -275,7 +284,16 @@ pub fn web_fetch_icon(url: String) -> Result<Option<String>, String> {
         .take((MAX_ICON + 1) as u64)
         .read_to_end(&mut bytes)
         .map_err(|e| format!("图标读取失败: {e}"))?;
-    if bytes.is_empty() || bytes.len() > MAX_ICON {
+    if bytes.is_empty() {
+        return Ok(None);
+    }
+    if bytes.len() > MAX_ICON {
+        crate::log::warn(&format!(
+            "网站图标过大已跳过: {} ({} bytes > {}KB)",
+            icon_url,
+            bytes.len(),
+            MAX_ICON / 1024
+        ));
         return Ok(None);
     }
     use base64::Engine;
