@@ -1,5 +1,6 @@
 <script lang="ts">
   import AppIcon from "./AppIcon.svelte";
+  import FaviconIcon from "./FaviconIcon.svelte";
   import type { IconCell, PluginInfo } from "../core/types";
 
   let {
@@ -29,6 +30,9 @@
   const isAppIcon = $derived(!plugin && !!item.action);
   /** 显示用的 emoji：自定义 > 插件 emoji > 📦 */
   const displayEmoji = $derived(item.emoji ?? plugin?.emoji ?? "📦");
+  /** 网页快捷方式：插件含 url 设置项 → 显示网站 favicon */
+  const urlDefault = $derived(plugin?.settings?.find((s) => s.key === "url")?.default);
+  const isWebIcon = $derived(urlDefault !== undefined);
 </script>
 
 <div
@@ -101,6 +105,14 @@
       name={item.title}
       size={52}
       radius={14}
+    />
+  {:else if isWebIcon}
+    <!-- 网页快捷方式：显示网站 favicon（兜底链见 FaviconIcon） -->
+    <FaviconIcon
+      cellId={item.id}
+      pluginId={plugin?.id ?? ""}
+      fallbackUrl={String(urlDefault ?? "")}
+      fallbackEmoji={displayEmoji}
     />
   {:else}
     <div
