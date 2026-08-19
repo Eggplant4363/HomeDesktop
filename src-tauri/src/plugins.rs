@@ -138,12 +138,52 @@ pub fn launch_cell(app: AppHandle, cell_id: String) -> Result<(), String> {
                         .into_iter()
                         .find(|p| &p.id == plugin_id)
                         .ok_or_else(|| format!("plugin not found: {plugin_id}"))?;
-                    return launch_plugin_action(&plugin);
+                    // 动作支持 `{设置键}` 占位符（如 {url}）：用实例设置替换，缺省回退 manifest 默认值
+                    let mut resolved = plugin.clone();
+                    if let Some(action) = resolved.actions.first_mut() {
+                        if let Some(path) = action.path.as_mut() {
+                            *path = resolve_placeholders(&app, path, &cell_id, &plugin);
+                        }
+                        if let Some(cmd) = action.cmd.as_mut() {
+                            *cmd = resolve_placeholders(&app, cmd, &cell_id, &plugin);
+                        }
+                    }
+                    return launch_plugin_action(&resolved);
                 }
             }
         }
     }
     Err("cell not found".into())
+}
+
+/// 动作命令/路径中的 `{设置键}` 占位符 → 实例设置（`cell.<cellId>.<key>`），
+/// 未配置时回退 manifest 默认值（如 `{url}` 网页插件）。
+fn resolve_placeholders(
+    app: &AppHandle,
+    text: &str,
+    cell_id: &str,
+    plugin: &PluginInfo,
+) -> String {
+    let mut out = text.to_string();
+    for setting in &plugin.settings {
+        let key = &setting.key;
+        let ph = format!("{{{key}}}");
+        if !out.contains(&ph) {
+            continue;
+        }
+        let value = crate::config::config_get(app.clone(), format!("cell.{cell_id}.{key}"))
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                setting
+                    .default
+                    .as_ref()
+                    .and_then(|d| d.as_str().map(|s| s.to_string()))
+            })
+            .unwrap_or_default();
+        out = out.replace(&ph, &value);
+    }
+    out
 }
 
 /// 插件市场 MVP：从本地 zip 安装插件包（zip 内含 manifest.json + 可选资源）

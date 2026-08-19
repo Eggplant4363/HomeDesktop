@@ -1,0 +1,12 @@
+{
+  "id": "dev.homedesktop.web-shortcut",
+  "name": "网页（自定义网址）",
+  "version": "1.0.0",
+  "type": "icon",
+  "emoji": "🌐",
+  "sizes": [{ "w": 1, "h": 1 }],
+  "settings": [
+    { "key": "url", "label": "网址", "type": "text", "default": "https://www.baidu.com" }
+  ],
+  "actions": [{ "kind": "app", "path": "{url}" }]
+}

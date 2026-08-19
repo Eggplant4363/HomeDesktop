@@ -1,3 +1,11 @@
+## 2026-02-13（网页快捷方式插件：自定义网址）✅
+
+- **需求**（用户提出）：增加一个"添加网站 URL"的插件并发布到 GitHub
+- **实现**：
+  - 新插件 dev.homedesktop.web-shortcut（网页（自定义网址）🌐）：设置项 url（网址），点击用默认浏览器打开
+  - 动作占位符支持：launch_cell 对插件动作的 path/cmd 支持 {设置键}（如 {url}）→ 用实例设置（cell.<cellId>.url）替换，缺省回退 manifest 默认值（plugins.rs::resolve_placeholders）
+  - 已上架在线市场（HomeDesktopPlugins，jsDelivr 分发）
+- **验证**：cargo check 通过
 ## 2026-02-13（发布 v0.3.0：自由摆放 + 仅全屏）✅
 
 - **内容**（自 v0.2.1）：
