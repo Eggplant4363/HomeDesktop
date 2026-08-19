@@ -1,3 +1,13 @@
+# 变更日志 — HomeDesktop
+
+> 按 skill `product-driven-project` P5 要求维护：代码与文档同步记录。
+> 本文件即本项目长期记忆（Memory）：每轮迭代/每个 bug 修复/每个产品决策都记录于此。
+
+## 版本策略（2026-02-13 用户授权自主决定）
+
+- **小版本（patch，x.y.z+1）**：小功能叠加、bug 修复、体验优化（如 v0.4.1）
+- **大版本（minor/major，x.y+1 或 x+1.0）**：大的功能变更、核心交互改变（如 v0.5.0、v1.0.0）
+- 由开发自主判断归类并决定版本号；发布流程固定：release/x.y.z 分支 → 版本号 → 合并 → 标签 → CI 构建 → 草稿 Release
 ## 2026-02-13（发布 v0.4.1：网页图标缓存与稳定性修复）✅
 
 - **内容**（自 v0.4.0）：
@@ -101,10 +111,6 @@
 - **发布**：打标签 0.1.0 → workflow 新增标签触发 + release 任务（softprops/action-gh-release），三平台构建后自动创建**草稿 Release**
 - **修复**：bundle 产物上传路径 bug —— 产物在工作区根 	arget/release/bundle/（cargo workspace 共享 target），原路径 src-tauri/target/... 匹配不到文件 → 三平台安装包从未上传（CI 日志 No files were found... No artifacts will be uploaded）；改为 	arget/release/bundle/**/* + 	arget/*/release/bundle/**/*（覆盖 mac 交叉目标）
 - **产物**（8 个，全部上传成功）：Windows NSIS exe + MSI、macOS aarch64 dmg、Linux deb/rpm/AppImage（+ deb 内部 tar.gz×2）
-# 变更日志 — HomeDesktop
-
-> 按 skill `product-driven-project` P5 要求维护：代码与文档同步记录。
-> 本文件即本项目长期记忆（Memory）：每轮迭代/每个 bug 修复/每个产品决策都记录于此。
 
 ## 2026-02-13（发布到 GitHub + CI 三平台全绿）✅
 
