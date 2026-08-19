@@ -232,14 +232,24 @@ fn extract_html_title(html: &str) -> Option<String> {
     Some(collapsed.chars().take(60).collect())
 }
 
-/// 获取网页声明的图标 URL（解析 `<link rel="icon|shortcut icon|apple-touch-icon">` 并转绝对地址）。
 /// 获取网页图标为 **data URL**（WebView 加载远程图不跳过证书校验，自签证书站点
-/// 的图标必须在 Rust 侧免校验抓取后转 data: 才能显示）。失败返回 None → 前端回退 emoji。
+/// 的图标必须在 Rust 侧免校验抓取后转 data: 才能显示）。
+/// **磁盘缓存**：按网址哈希存 `icons/web/<hash>.txt`，抓一次永久生效（不再每次联网）。
+/// 失败返回 None → 前端回退 emoji。
 #[tauri::command]
-pub fn web_fetch_icon(url: String) -> Result<Option<String>, String> {
+pub fn web_fetch_icon(app: AppHandle, url: String) -> Result<Option<String>, String> {
     use std::io::Read;
     // 上限 4MB（部分站点声明的图标是大图，如 cchong.cc 2.4MB）
     const MAX_ICON: usize = 4 * 1024 * 1024;
+
+    // 0) 磁盘缓存命中：直接返回（"存一次"，无需重新抓取）
+    if let Some(cache) = web_icon_cache_path(&app, &url) {
+        if cache.is_file() {
+            if let Ok(data) = std::fs::read_to_string(&cache) {
+                return Ok(Some(data));
+            }
+        }
+    }
 
     let agent = fetch_agent();
     // 1) 拉页面 → 找声明的图标 URL（优先 link rel=icon，其次 /favicon.ico、/favicon.png）
@@ -298,12 +308,29 @@ pub fn web_fetch_icon(url: String) -> Result<Option<String>, String> {
     }
     use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    let data_url = format!("data:{ctype};base64,{b64}");
     crate::log::info(&format!(
-        "网站图标: {} ({ctype}, {} bytes)",
+        "网站图标: {} ({ctype}, {} bytes)，已缓存",
         icon_url,
         bytes.len()
     ));
-    Ok(Some(format!("data:{ctype};base64,{b64}")))
+    if let Some(cache) = web_icon_cache_path(&app, &url) {
+        if let Some(parent) = cache.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(&cache, &data_url);
+    }
+    Ok(Some(data_url))
+}
+
+/// 网站图标磁盘缓存路径（icons/web/<url hash>.txt）
+fn web_icon_cache_path(app: &AppHandle, url: &str) -> Option<std::path::PathBuf> {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let dir = app.path().app_data_dir().ok()?.join("icons").join("web");
+    let mut h = DefaultHasher::new();
+    url.hash(&mut h);
+    Some(dir.join(format!("{:016x}.txt", h.finish())))
 }
 
 /// 抓取用的浏览器 UA（部分站点对非浏览器 UA 返回 403）
