@@ -247,7 +247,10 @@ pub fn web_fetch_icon(url: String) -> Result<Option<String>, String> {
             .or_else(|| resolve_url(&url, "/favicon.ico"))
             .or_else(|| resolve_url(&url, "/favicon.png"))
     };
-    let Some(icon_url) = icon_url else { return Ok(None) };
+    let Some(icon_url) = icon_url else {
+        crate::log::warn(&format!("网站图标: 未找到图标来源 ({url})"));
+        return Ok(None);
+    };
 
     // 2) 抓取图标字节（免证书校验）→ data URL
     let resp = agent
@@ -277,6 +280,11 @@ pub fn web_fetch_icon(url: String) -> Result<Option<String>, String> {
     }
     use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    crate::log::info(&format!(
+        "网站图标: {} ({ctype}, {} bytes)",
+        icon_url,
+        bytes.len()
+    ));
     Ok(Some(format!("data:{ctype};base64,{b64}")))
 }
 
