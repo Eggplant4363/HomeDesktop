@@ -275,6 +275,23 @@
     persist();
     showAdd = false;
     log.info(`添加图标: ${plugin.name} (${icon.size.w}x${icon.size.h})`);
+    // 网页快捷方式：自动获取网站标题作为图标名
+    const urlDefault = plugin.settings?.find((s) => s.key === "url")?.default;
+    if (urlDefault) void refreshWebTitle(icon.id, String(urlDefault));
+  }
+
+  /** 网页快捷方式：拉取网站标题并设为图标名（失败保持原名称） */
+  async function refreshWebTitle(cellId: string, url: string): Promise<void> {
+    try {
+      const title = await invoke<string | null>("web_fetch_title", { url });
+      if (title && title.trim()) {
+        updateIconAppearance(cellId, { title: title.trim() });
+        persist();
+        log.info(`网页标题: ${title.trim()} (${url})`);
+      }
+    } catch (e) {
+      log.error(`获取网页标题失败: ${url} -> ${e}`);
+    }
   }
 
   function handleNewFolder(name: string): void {
@@ -965,6 +982,7 @@
       plugin={settingsPlugin}
       cellId={settingsTarget ?? undefined}
       onclose={() => (settingsTarget = null)}
+      onurlchange={(cellId, url) => void refreshWebTitle(cellId, url)}
     />
   {/if}
 

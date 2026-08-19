@@ -12,11 +12,14 @@
     plugin,
     cellId,
     onclose,
+    onurlchange,
   }: {
     plugin: PluginInfo;
     /** 当前图标的实例 id（每个图标独立设置） */
     cellId?: string;
     onclose?: () => void;
+    /** 网页快捷方式：url 设置变化时回调（用于自动获取网站标题） */
+    onurlchange?: (cellId: string, url: string) => void;
   } = $props();
 
   let values = $state<Record<string, string | number | boolean>>({});
@@ -33,6 +36,10 @@
   async function save(key: string, value: string | number | boolean): Promise<void> {
     values[key] = value;
     await setCellSetting(cellId ?? plugin.id, plugin.id, key, value);
+    // 网页快捷方式：url 变化 → 通知外层自动获取网站标题
+    if (key === "url") {
+      onurlchange?.(cellId ?? plugin.id, String(value));
+    }
     const instanceId = cellId ?? plugin.id;
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => {

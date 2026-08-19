@@ -186,6 +186,42 @@ fn resolve_placeholders(
     out
 }
 
+/// 获取网页标题（网页快捷方式：图标标签自动显示站点标题）。失败/无标题返回 None。
+#[tauri::command]
+pub fn web_fetch_title(url: String) -> Result<Option<String>, String> {
+    let resp = ureq::get(&url)
+        .timeout(std::time::Duration::from_secs(8))
+        .call()
+        .map_err(|e| format!("请求失败: {e}"))?;
+    let mut body = resp.into_string().map_err(|e| e.to_string())?;
+    body.truncate(512 * 1024); // 只解析前 512KB
+    Ok(extract_html_title(&body))
+}
+
+/// 从 HTML 提取 <title>（大小写不敏感、跨行、简单实体解码、折叠空白、限长 60 字符）
+fn extract_html_title(html: &str) -> Option<String> {
+    let lower = html.to_lowercase();
+    let start = lower.find("<title")?;
+    let gt = lower[start..].find('>')? + start + 1;
+    let end = lower[gt..].find("</title")? + gt;
+    let mut t = html[gt..end].trim().to_string();
+    for (from, to) in [
+        ("&amp;", "&"),
+        ("&lt;", "<"),
+        ("&gt;", ">"),
+        ("&quot;", "\""),
+        ("&#39;", "'"),
+        ("&nbsp;", " "),
+    ] {
+        t = t.replace(from, to);
+    }
+    let collapsed: String = t.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.is_empty() {
+        return None;
+    }
+    Some(collapsed.chars().take(60).collect())
+}
+
 /// 插件市场 MVP：从本地 zip 安装插件包（zip 内含 manifest.json + 可选资源）
 /// 解压到用户数据目录 plugins/<id>/，随后可被插件注册表发现
 #[tauri::command]
