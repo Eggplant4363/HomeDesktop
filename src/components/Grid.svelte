@@ -30,6 +30,9 @@
     onblankclick,
     /** 新添加的单元 id：播放"弹出 + 光环"入场特效（无则不高亮） */
     highlightId = null,
+    /** 页面左右滑动切换：拖动中实时位移（px，阻尼后）；松手时原始位移（决定方向） */
+    onswipemove,
+    onswipeend,
   }: {
     cells: Cell[];
     queryText?: string;
@@ -52,6 +55,8 @@
     onfitted?: () => void;
     /** 点击空白区域（非编辑模式、非拖拽）→ 外层隐藏应用 */
     onblankclick?: () => void;
+    onswipemove?: (dx: number) => void;
+    onswipeend?: (dx: number) => void;
   } = $props();
 
   // ---------- 拖拽（Pointer Events：鼠标移动即拖、触屏长按拾取；仅编辑模式可移动） ----------
@@ -82,6 +87,11 @@
   let dragCandidate: string | null = null;
   let startX = 0;
   let startY = 0;
+  // 页面左右滑动切页（正常模式：鼠标左键/触屏）
+  const SWIPE_START = 24; // 判定为滑动的起始位移 px
+  const SWIPE_FACTOR = 0.55; // 手指位移 → 页面位移 阻尼
+  let swipeActive = false; // 滑动进行中（非响应式）
+  let swipeRawDx = 0; // 松手时的原始位移
   let dragStartPointerX = 0;
   let dragStartPointerY = 0;
   let longPressTimer: ReturnType<typeof setTimeout> | undefined;
@@ -167,12 +177,14 @@
 
   function onPointerDown(e: PointerEvent): void {
     if ((e.target as HTMLElement).closest("button")) return; // 忽略操作按钮
-    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-cell-id]");
-    if (!el) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return; // 仅鼠标左键
     pointerId = e.pointerId;
-    dragCandidate = el.dataset.cellId ?? null;
     startX = e.clientX;
     startY = e.clientY;
+    swipeActive = false;
+    swipeRawDx = 0;
+    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-cell-id]");
+    dragCandidate = el?.dataset.cellId ?? null;
     if (e.pointerType === "touch" && dragCandidate) {
       // 触屏：长按 → 进入编辑模式并拾取（苹果风格）
       longPressTimer = setTimeout(() => {
@@ -191,7 +203,31 @@
       edgeFlip(e.clientX);
       return;
     }
-    if (pointerId === null || pointerId !== e.pointerId || !dragCandidate) return;
+    if (pointerId === null || pointerId !== e.pointerId) return;
+    // 正常模式：左右滑动切换页面（鼠标左键按住拖动 / 触屏滑动）
+    if (!ui.editMode) {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (!swipeActive) {
+        if (Math.abs(dx) > SWIPE_START && Math.abs(dx) > Math.abs(dy) * 1.2) {
+          swipeActive = true;
+          clearLongPress();
+          // 捕获指针：滑动过程中与松手后的 click 都归网格（避免误触图标/空白）
+          try {
+            gridEl?.setPointerCapture(e.pointerId);
+          } catch {
+            /* 忽略 */
+          }
+        }
+      }
+      if (swipeActive) {
+        e.preventDefault();
+        swipeRawDx = dx;
+        onswipemove?.((dx - Math.sign(dx) * SWIPE_START) * SWIPE_FACTOR);
+        return;
+      }
+    }
+    if (!dragCandidate) return;
     const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
     if (e.pointerType === "touch") {
       if (ui.editMode) {
@@ -210,6 +246,21 @@
 
   function onPointerUp(e: PointerEvent): void {
     clearLongPress();
+    if (swipeActive) {
+      swipeActive = false;
+      suppressClick = true; // 阻止随后的 click（图标启动 / 空白隐藏）
+      const dx = swipeRawDx;
+      swipeRawDx = 0;
+      const pid = pointerId;
+      pointerId = null;
+      try {
+        gridEl?.releasePointerCapture(pid!);
+      } catch {
+        /* 忽略 */
+      }
+      onswipeend?.(dx);
+      return;
+    }
     if (!dragging) return;
     e.preventDefault();
     if (overFolderId && overFolderId !== draggingId) {
@@ -223,6 +274,8 @@
 
   function onPointerCancel(): void {
     clearLongPress();
+    swipeActive = false;
+    swipeRawDx = 0;
     if (dragging) endDrag();
   }
 

@@ -259,6 +259,65 @@
     log.debug("显示应用窗口（淡入）");
   }
 
+  // ---------- 页面左右滑动切换（鼠标左键 / 触屏） ----------
+  /** 滑动容器实时位移（px） */
+  let slideX = $state(0);
+  let slideTransition = $state("none");
+  let slideWrap = $state<HTMLElement | undefined>();
+  let slideAnimating = false;
+
+  /** 拖动中：跟随手指位移（阻尼已在 Grid 处理） */
+  function onSwipeMove(dx: number): void {
+    if (slideAnimating) return;
+    slideX = dx;
+  }
+
+  /** 松手：达阈值 → 两段式滑出/滑入切换页；未达 → 回弹 */
+  function onSwipeEnd(dx: number): void {
+    if (slideAnimating) return;
+    slideAnimating = true;
+    const width = slideWrap?.clientWidth || window.innerWidth;
+    const th = Math.max(50, width * 0.18);
+    const dir = dx <= -th && currentPage.index < layout.pages.length - 1
+      ? 1
+      : dx >= th && currentPage.index > 0
+        ? -1
+        : 0;
+    const ease = "transform 0.22s cubic-bezier(0.25, 0.1, 0.25, 1)";
+    if (dir === 0) {
+      // 未达阈值：回弹
+      slideTransition = ease;
+      slideX = 0;
+      setTimeout(() => {
+        slideTransition = "none";
+        slideAnimating = false;
+      }, 240);
+      return;
+    }
+    const from = currentPage.index;
+    // 第一段：当前页滑出
+    slideTransition = ease;
+    slideX = -dir * width;
+    setTimeout(() => {
+      // 切换页面
+      currentPage.index += dir;
+      log.info(`滑动切换页: ${from + 1} → ${currentPage.index + 1}`);
+      // 第二段：新页从对面滑入
+      slideTransition = "none";
+      slideX = dir * width;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          slideTransition = ease;
+          slideX = 0;
+          setTimeout(() => {
+            slideTransition = "none";
+            slideAnimating = false;
+          }, 260);
+        });
+      });
+    }, 230);
+  }
+
   // 托盘 / 快捷键（Rust）发来的显示/隐藏请求：统一走动画
   let unlistenWinEvents: (() => void)[] = [];
   $effect(() => {
@@ -1289,10 +1348,15 @@
         onsettings={(id) => handleSettings(id)}
       />
     {:else}
-      <Grid
-        cells={layout.pages[currentPage.index] ?? []}
-        queryText={query.text}
-        highlightId={addedFlashId}
+      <div
+        class="page-slide"
+        bind:this={slideWrap}
+        style="transform: translateX({slideX}px); transition: {slideTransition};"
+      >
+        <Grid
+          cells={layout.pages[currentPage.index] ?? []}
+          queryText={query.text}
+          highlightId={addedFlashId}
         onlaunch={(id) => handleLaunch(id)}
         ondelete={(id) => handleDelete(id)}
         onaddclick={() => (showAdd = true)}
@@ -1306,9 +1370,12 @@
         ondropinto={handleDropInto}
         onflipprev={handlePrev}
         onflipnext={handleNext}
-        onfitted={() => persist()}
-        onblankclick={hideWindow}
-      />
+          onfitted={() => persist()}
+          onblankclick={hideWindow}
+          onswipemove={onSwipeMove}
+          onswipeend={onSwipeEnd}
+        />
+      </div>
     {/if}
   </section>
 
@@ -1388,6 +1455,11 @@
   .content {
     flex: 1;
     overflow: hidden;
+  }
+  /* 页面左右滑动容器（切页动画） */
+  .page-slide {
+    height: 100%;
+    will-change: transform;
   }
   .pager {
     display: flex;
