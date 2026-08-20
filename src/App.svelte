@@ -1625,12 +1625,18 @@
     width: 340px;
     max-height: 80vh;
     overflow-y: auto;
+    /* 不显示竖向滚动条（滚轮仍可滚动） */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     background: var(--bg-elev);
     border-radius: 16px;
     padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 14px;
+  }
+  .settings::-webkit-scrollbar {
+    display: none;
   }
   .set-head {
     font-weight: 600;
