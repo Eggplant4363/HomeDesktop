@@ -113,6 +113,18 @@ fn fetch_info() -> Result<MediaInfo, String> {
     if let Ok(thumb) = props.Thumbnail() {
         info.thumbnail = read_thumbnail(thumb).ok();
     }
+    // 状态变化追踪（仅变化时记录，供排查跳曲不自动播放）
+    {
+        use std::sync::Mutex;
+        static LAST: Mutex<Option<String>> = Mutex::new(None);
+        let key = format!("{}|{}|{}", info.app, info.state, info.title);
+        if let Ok(mut last) = LAST.lock() {
+            if last.as_deref() != Some(key.as_str()) {
+                crate::log::debug(&format!("媒体状态变化: {key}"));
+                *last = Some(key);
+            }
+        }
+    }
     Ok(info)
 }
 
@@ -211,16 +223,54 @@ fn control(action: &str) -> Result<(), String> {
                     .get()
                     .map_err(|e| format!("上一曲等待失败: {e}"))?
             };
+            crate::log::debug(&format!(
+                "媒体跳曲({action}): ok={ok}, was_playing={is_playing}, app={}",
+                session.SourceAppUserModelId().map(|s| s.to_string()).unwrap_or_default()
+            ));
             if !ok {
                 return Err("播放器拒绝了跳曲请求".into());
             }
-            // 部分播放器 SMTC 跳曲后会自动暂停：若跳曲前在播放，补发一次播放命令恢复自动播放
+            // 部分播放器（如 AmcfyMusic）跳曲后 SMTC 状态与实际音频失步：
+            // 状态立即报 Playing、歌名也更新，但音频引擎还没起来（它加载曲目很慢）。
+            // 对策：先等 1.5s 让播放器加载，再做最多 3 轮"暂停→播放"踢击（每轮间隔 1.5s），
+            // 直到某轮踢击后状态变为 paused（说明音频引擎已响应）或 3 轮结束。
             if is_playing {
-                session
-                    .TryPlayAsync()
-                    .map_err(|e| format!("恢复播放失败: {e}"))?
-                    .get()
-                    .map_err(|e| format!("恢复播放等待失败: {e}"))?;
+                let status = || {
+                    session
+                        .GetPlaybackInfo()
+                        .ok()
+                        .and_then(|p| p.PlaybackStatus().ok())
+                        .unwrap_or(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Closed)
+                };
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                let mut kicked = false;
+                for round in 1..=3 {
+                    let before = status();
+                    let p1 = session
+                        .TryPauseAsync()
+                        .ok()
+                        .and_then(|op| op.get().ok())
+                        .unwrap_or(false);
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    let p2 = session
+                        .TryPlayAsync()
+                        .ok()
+                        .and_then(|op| op.get().ok())
+                        .unwrap_or(false);
+                    let after = status();
+                    crate::log::debug(&format!(
+                        "媒体跳曲后踢击第 {round} 轮: before={before:?}, pause={p1}, play={p2}, after={after:?}"
+                    ));
+                    if matches!(
+                        after,
+                        GlobalSystemMediaTransportControlsSessionPlaybackStatus::Paused
+                    ) {
+                        kicked = true;
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                }
+                crate::log::debug(&format!("媒体跳曲后踢击结束: kicked={kicked}"));
             }
         }
         _ => return Err(format!("未知控制动作: {action}")),

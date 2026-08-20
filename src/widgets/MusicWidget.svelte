@@ -40,6 +40,8 @@
     return () => clearInterval(timer);
   });
 
+
+
   /** 上一曲 / 播放暂停 / 下一曲；操作后立即刷新 */
   async function control(action: "previous" | "playpause" | "next"): Promise<void> {
     if (working) return;
