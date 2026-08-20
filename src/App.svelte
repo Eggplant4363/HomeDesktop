@@ -226,14 +226,52 @@
     showSearch = false;
   }
 
-  /** 隐藏本应用窗口（启动外部应用/网页后、或点击空白区域时；Alt+Space/托盘可再唤出） */
+  /** 窗口显示/隐藏动画状态（.anim-hidden → 淡出缩放；移除 → 淡入缩放，macOS 风格） */
+  let windowHidden = $state(false);
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** 隐藏本应用窗口（启动外部应用/网页后、或点击空白区域时；Alt+Space/托盘可再唤出）
+   *  特效开启：先播 200ms 淡出缩放，动画结束再真正隐藏；关闭：立即隐藏 */
   function hideWindow(): void {
-    const win = getCurrentWindow();
-    win
-      .hide()
-      .then(() => log.info("隐藏应用窗口"))
-      .catch((e) => log.error(`隐藏窗口失败: ${e}`));
+    if (!appearance.effects.windowAnim) {
+      const win = getCurrentWindow();
+      win
+        .hide()
+        .then(() => log.info("隐藏应用窗口"))
+        .catch((e) => log.error(`隐藏窗口失败: ${e}`));
+      return;
+    }
+    windowHidden = true;
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => {
+      hideTimer = undefined;
+      const win = getCurrentWindow();
+      win
+        .hide()
+        .then(() => log.info("隐藏应用窗口（动画后）"))
+        .catch((e) => log.error(`隐藏窗口失败: ${e}`));
+    }, 200);
   }
+
+  /** 显示窗口（Rust 托盘/快捷键已 show，这里只负责淡入） */
+  function showWindow(): void {
+    windowHidden = false;
+    log.debug("显示应用窗口（淡入）");
+  }
+
+  // 托盘 / 快捷键（Rust）发来的显示/隐藏请求：统一走动画
+  let unlistenWinEvents: (() => void)[] = [];
+  $effect(() => {
+    void appearance.effects.windowAnim;
+    let alive = true;
+    listen("hide-window", () => hideWindow()).then((un) => alive && unlistenWinEvents.push(un));
+    listen("show-window", () => showWindow()).then((un) => alive && unlistenWinEvents.push(un));
+    return () => {
+      alive = false;
+      for (const un of unlistenWinEvents) un();
+      unlistenWinEvents = [];
+    };
+  });
 
   /** 搜索面板：启动桌面图标（含 system_apps 拦截）/ 打开文件夹 */
   function handleSearchOpenIcon(cellId: string): void {
@@ -687,6 +725,14 @@
     toast(`添加图标特效已${appearance.effects.iconAdd ? "开启" : "关闭"}`);
   }
 
+  /** 特效开关：窗口显示/隐藏过渡动画 */
+  function handleToggleWindowAnim(): void {
+    appearance.effects.windowAnim = !appearance.effects.windowAnim;
+    void saveAppearance();
+    log.info(`窗口过渡特效: ${appearance.effects.windowAnim ? "开启" : "关闭"}`);
+    toast(`窗口过渡特效已${appearance.effects.windowAnim ? "开启" : "关闭"}`);
+  }
+
   function handleSetTileSize(size: number): void {
     appearance.tileSize = size;
     void saveAppearance();
@@ -802,6 +848,7 @@
 
 <main
   class="shell"
+  class:anim-hidden={windowHidden}
   style="--tile-size: {appearance.tileSize}px; background: {backgroundCss(getCurrentBackground())};"
 >
   <header class="topbar">
@@ -896,6 +943,11 @@
             {appearance.effects.iconAdd
               ? "✅ 添加图标弹出特效已开启（点击关闭）"
               : "⛔ 添加图标弹出特效已关闭（点击开启）"}
+          </button>
+          <button class="wallpaper-btn" onclick={handleToggleWindowAnim}>
+            {appearance.effects.windowAnim
+              ? "✅ 窗口显示/隐藏过渡已开启（点击关闭）"
+              : "⛔ 窗口显示/隐藏过渡已关闭（点击开启）"}
           </button>
         </div>
 
@@ -1290,6 +1342,14 @@
     flex-direction: column;
     height: 100vh;
     padding: 18px 24px;
+    /* 窗口显示/隐藏过渡（macOS 风格：淡入淡出 + 轻微缩放） */
+    transition:
+      opacity 0.2s cubic-bezier(0.25, 0.1, 0.25, 1),
+      transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+  .shell.anim-hidden {
+    opacity: 0;
+    transform: scale(0.96);
   }
   .topbar {
     display: flex;

@@ -100,14 +100,15 @@ pub fn run() {
 }
 
 /// Launchpad Pad 开关（M6）：隐藏 → 显示并全屏；全屏中 → 隐藏；窗口模式 → 全屏
+/// 隐藏/显示由前端播淡出/淡入动画（emit "hide-window"/"show-window" 事件），保持苹果风格过渡
 pub(crate) fn toggle_pad(app: &tauri::AppHandle) {
-    use tauri::Manager;
+    use tauri::{Emitter, Manager};
     if let Some(win) = app.get_webview_window("main") {
         match win.is_visible() {
             Ok(true) => match win.is_fullscreen() {
                 Ok(true) => {
-                    log::debug("Pad 开关: 全屏中 → 隐藏");
-                    let _ = win.hide();
+                    log::debug("Pad 开关: 全屏中 → 隐藏（前端动画）");
+                    let _ = app.emit("hide-window", ());
                 }
                 _ => {
                     log::debug("Pad 开关: 窗口模式 → 全屏");
@@ -120,21 +121,24 @@ pub(crate) fn toggle_pad(app: &tauri::AppHandle) {
                 let _ = win.show();
                 let _ = win.set_fullscreen(true);
                 let _ = win.set_focus();
+                let _ = app.emit("show-window", ());
             }
         }
     }
 }
 
 fn toggle_window(app: &tauri::AppHandle) {
-    use tauri::Manager;
+    use tauri::{Emitter, Manager};
     if let Some(win) = app.get_webview_window("main") {
         match win.is_visible() {
             Ok(true) => {
-                let _ = win.hide();
+                log::debug("托盘: 隐藏（前端动画）");
+                let _ = app.emit("hide-window", ());
             }
             _ => {
                 let _ = win.show();
                 let _ = win.set_focus();
+                let _ = app.emit("show-window", ());
             }
         }
     }
