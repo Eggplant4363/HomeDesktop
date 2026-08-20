@@ -1,8 +1,11 @@
 <script lang="ts">
   // 系统应用面板：内置「系统应用」插件点击后打开的应用列表（真实图标 + 搜索）
+  // 支持"选择自定义 exe 位置"：文件选择器选任意 .exe → 自动提取图标加入
   import { onMount } from "svelte";
+  import { open } from "@tauri-apps/plugin-dialog";
   import { scanApps } from "../core/pluginLoader";
   import type { AppInfo } from "../core/pluginLoader";
+  import { log } from "../core/logger";
   import AppIcon from "./AppIcon.svelte";
 
   let {
@@ -18,10 +21,32 @@
 
   let apps = $state<AppInfo[]>([]);
   let appQuery = $state("");
+  let picking = $state(false);
 
   onMount(async () => {
     apps = await scanApps();
   });
+
+  /** 选择自定义 exe：文件对话框 → 取文件名 → 交给外层添加（AppIcon 自动提取图标） */
+  async function pickCustomExe(): Promise<void> {
+    if (picking) return;
+    picking = true;
+    try {
+      const picked = await open({
+        multiple: false,
+        filters: [{ name: "应用程序", extensions: ["exe"] }],
+      });
+      if (typeof picked !== "string" || !picked) return;
+      const base = picked.split(/[\\/]/).pop() ?? "";
+      const name = base.replace(/\.exe$/i, "") || "自定义应用";
+      log.info(`选择自定义 exe: ${picked}`);
+      onadd?.({ name, path: picked });
+    } catch (e) {
+      log.error(`选择自定义 exe 失败: ${e}`);
+    } finally {
+      picking = false;
+    }
+  }
 
   const filteredApps = $derived(
     appQuery
@@ -49,6 +74,9 @@
         placeholder="搜索已安装的应用…"
         bind:value={appQuery}
       />
+      <button class="custom-btn" onclick={pickCustomExe} disabled={picking}>
+        📂 选择自定义 exe 位置…（自动获取图标）
+      </button>
     </div>
     <div class="list">
       {#each filteredApps as app (app.name + app.path)}
@@ -113,6 +141,25 @@
   }
   .search input:focus {
     border-color: var(--accent);
+  }
+  .custom-btn {
+    width: 100%;
+    margin-top: 8px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--fg-dim);
+    font-size: 12px;
+    padding: 9px 12px;
+    cursor: pointer;
+  }
+  .custom-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .custom-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .list {
     overflow-y: auto;
