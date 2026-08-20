@@ -14,6 +14,8 @@ mod media {
         pub app: String,
         pub state: String,
         pub thumbnail: Option<String>,
+        pub position: f64,
+        pub duration: f64,
     }
     #[tauri::command]
     pub fn media_now_playing() -> Result<MediaInfo, String> {

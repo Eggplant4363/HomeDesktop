@@ -3,6 +3,7 @@
   // 显示封面 / 标题 / 歌手，提供 上一曲 / 播放暂停 / 下一曲 控制（仅 Windows 生效）
   import { invoke } from "@tauri-apps/api/core";
   import { log } from "../core/logger";
+  import { openLyrics } from "../core/lyricsState.svelte";
 
   let { cellId }: { cellId?: string } = $props();
 
@@ -13,6 +14,8 @@
     app: string;
     state: string; // playing | paused | stopped | closed | changing
     thumbnail: string | null;
+    position: number;
+    duration: number;
   }
 
   let info = $state<MediaInfo | null>(null);
@@ -78,6 +81,11 @@
       {/if}
     </div>
     <div class="controls">
+      <button
+        class="ctrl lyrics-btn"
+        title="查看歌词"
+        onclick={() => info && openLyrics({ title: info.title, artist: info.artist, album: info.album, duration: info.duration })}
+      >🎤</button>
       <button class="ctrl" title="上一曲" onclick={() => control("previous")} disabled={working}>⏮</button>
       <button
         class="ctrl main"

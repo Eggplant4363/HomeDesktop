@@ -67,6 +67,8 @@
   import type { Cell, IconCell, PluginInfo } from "./core/types";
   import type { Background } from "./core/appearance.svelte";
   import PluginsPanel from "./components/PluginsPanel.svelte";
+  import LyricsPanel from "./components/LyricsPanel.svelte";
+  import { lyrics, closeLyrics } from "./core/lyricsState.svelte";
 
   let showAdd = $state(false);
   /** 新添加图标的 id（Grid 播放入场特效：弹出 + 光环），1.6s 后清除 */
@@ -1400,6 +1402,9 @@
       {/if}
       <button class="add-page-btn" onclick={handleAddPage} title="新增页面">＋ 新增页面</button>
     </footer>
+  {/if}
+  {#if lyrics.open}
+    <LyricsPanel onclose={closeLyrics} />
   {/if}
 </main>
 

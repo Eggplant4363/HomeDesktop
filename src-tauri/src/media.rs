@@ -28,6 +28,10 @@ pub struct MediaInfo {
     pub state: String,
     /// 专辑封面 data URL（PNG/JPEG），无封面为 null
     pub thumbnail: Option<String>,
+    /// 当前播放进度（秒，歌词同步用）
+    pub position: f64,
+    /// 总时长（秒）
+    pub duration: f64,
 }
 
 enum Request {
@@ -94,6 +98,8 @@ fn fetch_info() -> Result<MediaInfo, String> {
             .unwrap_or_default(),
         state: "closed".into(),
         thumbnail: None,
+        position: 0.0,
+        duration: 0.0,
     };
     info.state = match session
         .GetPlaybackInfo()
@@ -109,6 +115,13 @@ fn fetch_info() -> Result<MediaInfo, String> {
     }
     .into();
 
+    // 播放进度（歌词同步）：Position/EndTime 为 100ns 时间片
+    if let Ok(tl) = session.GetTimelineProperties() {
+        let pos = tl.Position().ok().map(|d| d.Duration as f64 / 10_000_000.0).unwrap_or(0.0);
+        let end = tl.EndTime().ok().map(|d| d.Duration as f64 / 10_000_000.0).unwrap_or(0.0);
+        info.position = if pos > 0.0 { pos } else { 0.0 };
+        info.duration = if end > pos { end } else { 0.0 };
+    }
     // 专辑封面（头像）：SMTC 缩略图 → 读取为 data URL
     if let Ok(thumb) = props.Thumbnail() {
         info.thumbnail = read_thumbnail(thumb).ok();
