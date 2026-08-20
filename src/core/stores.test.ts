@@ -29,6 +29,7 @@ import {
   setPlugins,
   updateIconAppearance,
 } from "./stores.svelte";
+import { setActivePageCols, setActivePageRows } from "./layout";
 import type { Cell, IconCell, Layout, PluginInfo } from "./types";
 
 function icon(id: string): IconCell {
@@ -96,7 +97,7 @@ describe("stores: 单元格", () => {
 
 describe("stores: 文件夹", () => {
   it("createFolder 添加文件夹到当前页", () => {
-    const id = createFolder("工具", "🧰");
+    const { id } = createFolder("工具", "🧰");
     const cell = layout.pages[0][0];
     expect(cell.kind).toBe("folder");
     if (cell.kind === "folder") {
@@ -108,7 +109,7 @@ describe("stores: 文件夹", () => {
   });
 
   it("deleteFolder 删除并关闭打开的文件夹", () => {
-    const id = createFolder("工具");
+    const { id } = createFolder("工具");
     openFolder.folderId = id;
     deleteFolder(id);
     expect(layout.pages[0]).toHaveLength(0);
@@ -116,7 +117,7 @@ describe("stores: 文件夹", () => {
   });
 
   it("addIconToFolder / removeIconFromFolder", () => {
-    const id = createFolder("工具");
+    const { id } = createFolder("工具");
     expect(addIconToFolder(id, icon("a"))).toBe(true);
     expect(addIconToFolder("不存在", icon("b"))).toBe(false);
     const folder = layout.pages[0][0];
@@ -132,7 +133,7 @@ describe("stores: 文件夹", () => {
   it("moveIconToFolder 从当前页移入文件夹", () => {
     addCell(icon("a"));
     addCell(icon("b"));
-    const folderId = createFolder("工具");
+    const { id: folderId } = createFolder("工具");
     expect(moveIconToFolder("a", folderId)).toBe(true);
     // a 从页中移除
     expect(layout.pages[0].map((c) => c.id)).toEqual(["b", folderId]);
@@ -143,7 +144,7 @@ describe("stores: 文件夹", () => {
   });
 
   it("moveIconToFolder 对不存在图标返回 false", () => {
-    const folderId = createFolder("工具");
+    const { id: folderId } = createFolder("工具");
     expect(moveIconToFolder("nope", folderId)).toBe(false);
   });
 
@@ -201,7 +202,7 @@ describe("stores: 尺寸（整数倍）", () => {
   });
 
   it("setCellSize 修改文件夹内图标尺寸", () => {
-    const folderId = createFolder("工具");
+    const { id: folderId } = createFolder("工具");
     addIconToFolder(folderId, icon("inner"));
     expect(setCellSize("inner", { w: 3, h: 2 })).toBe(true);
     const folder = layout.pages[0].find((c) => c.id === folderId);
@@ -223,6 +224,27 @@ describe("stores: 自由摆放（v3）", () => {
     expect(layout.pages[0][0].y).toBe(0);
     expect(layout.pages[0][1].x).toBe(1);
     expect(layout.pages[0][1].y).toBe(0);
+  });
+
+  it("addCell 当前页放不下 → 自动放到下一页并返回页码", () => {
+    setActivePageCols(2);
+    setActivePageRows(2);
+    try {
+      // 2x2 = 4 槽位，4 个 1x1 填满
+      expect(addCell(icon("a"))).toBe(0);
+      expect(addCell(icon("b"))).toBe(0);
+      expect(addCell(icon("c"))).toBe(0);
+      expect(addCell(icon("d"))).toBe(0);
+      // 第 1 页已满 → 自动放到第 2 页并返回页码 1
+      expect(addCell(icon("e"))).toBe(1);
+      expect(layout.pages[1][0].id).toBe("e");
+      expect(layout.pages[1][0].x).toBe(0);
+      expect(layout.pages[1][0].y).toBe(0);
+      expect(layout.pages[0]).toHaveLength(4);
+    } finally {
+      setActivePageCols(12);
+      setActivePageRows(500);
+    }
   });
 
   it("setCellPosition 修改坐标", () => {
@@ -270,7 +292,7 @@ describe("stores: 自由摆放（v3）", () => {
   });
 
   it("setIconPosition 文件夹内定位并交换", () => {
-    const folderId = createFolder("工具");
+    const { id: folderId } = createFolder("工具");
     addIconToFolder(folderId, icon("i1"));
     addIconToFolder(folderId, icon("i2"));
     expect(setIconPosition(folderId, "i1", 1, 0)).toBe(true);

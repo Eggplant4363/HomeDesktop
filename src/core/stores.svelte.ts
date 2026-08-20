@@ -47,8 +47,8 @@ export function setLayout(next: Layout): void {
 
 // ---------- 单元格操作 ----------
 
-/** 在页面空闲处放置新单元（自由摆放：自动找首个空位；当前页放不下 → 自动放到下一页，直到新建页） */
-export function addCell(cell: Cell, page = currentPage.index): void {
+/** 在页面空闲处放置新单元（自由摆放：自动找首个空位；当前页放不下 → 自动放到下一页，直到新建页）；返回实际放置的页码 */
+export function addCell(cell: Cell, page = currentPage.index): number {
   const w = cell.kind === "folder" ? 1 : cell.size.w;
   const h = cell.kind === "folder" ? 1 : cell.size.h;
   for (let p = page; ; p++) {
@@ -59,7 +59,7 @@ export function addCell(cell: Cell, page = currentPage.index): void {
       cells.push({ ...cloneCell(cell), x: slot.x, y: slot.y });
       if (p > page)
         log.info(`第 ${page + 1} 页已满，自动放到第 ${p + 1} 页（${w}x${h}）`);
-      return;
+      return p;
     }
   }
 }
@@ -230,10 +230,10 @@ export function findFolder(
   return undefined;
 }
 
-export function createFolder(name: string, emoji = "📁"): string {
+export function createFolder(name: string, emoji = "📁"): { id: string; page: number } {
   const id = crypto.randomUUID();
-  addCell({ kind: "folder", id, name, emoji, items: [] });
-  return id;
+  const page = addCell({ kind: "folder", id, name, emoji, items: [] });
+  return { id, page };
 }
 
 export function deleteFolder(folderId: string): void {

@@ -283,7 +283,11 @@
       if (openFolder.folderId) {
         addIconToFolder(openFolder.folderId, icon);
       } else {
-        addCell(icon);
+        const placedPage = addCell(icon);
+        if (placedPage !== currentPage.index) {
+          currentPage.index = placedPage;
+          log.info(`新图标在第 ${placedPage + 1} 页，已自动跳转`);
+        }
       }
       persist();
       showAdd = false;
@@ -312,7 +316,7 @@
   }
 
   function handleNewFolder(name: string): void {
-    const id = createFolder(name);
+    const { id, page } = createFolder(name);
     persist();
     if (moveTarget) {
       moveIconToFolder(moveTarget, id);
@@ -320,6 +324,10 @@
       persist();
     }
     showAdd = false;
+    if (page !== currentPage.index) {
+      currentPage.index = page;
+      log.info(`新文件夹在第 ${page + 1} 页，已自动跳转`);
+    }
     log.info(`新建文件夹: ${name} (${id})`);
   }
 
