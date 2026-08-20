@@ -11,6 +11,12 @@ export function setActivePageCols(n: number): void {
   if (Number.isInteger(n) && n >= 1) activePageCols = n;
 }
 
+/** 当前视口能容纳的行数：Grid 按窗口高度计算后同步（内容超出则自动放到下一页） */
+export let activePageRows = 500;
+export function setActivePageRows(n: number): void {
+  if (Number.isInteger(n) && n >= 1) activePageRows = n;
+}
+
 export interface Rect {
   x: number;
   y: number;

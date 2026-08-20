@@ -7,7 +7,7 @@
   import { currentPage, enterEditMode, fitCellsToCols, plugins, ui } from "../core/stores.svelte";
   import { appearance } from "../core/appearance.svelte";
   import { filterCells } from "../core/search";
-  import { PAGE_COLS, setActivePageCols } from "../core/layout";
+  import { PAGE_COLS, setActivePageCols, setActivePageRows } from "../core/layout";
   import { log } from "../core/logger";
 
   let {
@@ -142,6 +142,7 @@
     }
     const mr = Math.max(1, Math.floor((gridEl.clientHeight - PAD * 2) / SLOT));
     if (mr !== maxRows) maxRows = mr;
+    setActivePageRows(mr);
   }
 
   // 首次挂载、图标大小变化、窗口尺寸变化时重新度量（tile/gap/列数用于画布与吸附计算）
@@ -424,7 +425,7 @@
   .grid {
     position: relative;
     height: 100%;
-    overflow-y: auto;
+    overflow-y: hidden; /* 内容放不下时由 fitCellsToCols 自动移到下一页，绝不出现纵向滚动条 */
     overflow-x: auto; /* 极端窄窗口兜底：允许横向滚动查看 */
     touch-action: pan-y; /* 触屏：纵向滚动交给浏览器，长按/横向由应用处理 */
     /* 容器 tabindex=-1 可被点击聚焦；按键后 Chromium 会画默认黑色 focus ring → 禁用 */
