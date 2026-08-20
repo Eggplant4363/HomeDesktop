@@ -57,7 +57,8 @@ export function addCell(cell: Cell, page = currentPage.index): void {
   cells.push({ ...cloneCell(cell), x: slot.x, y: slot.y });
 }
 
-/** 画布适配：把超出画布（cols 列）或与其他单元重叠的单元移到画布内空位（不重排正常单元）；返回是否发生调整 */
+/** 画布适配：把超出画布（cols 列）或与其他单元重叠的单元移到画布内空位（不重排正常单元）；
+ *  若整体仍超出最大行数或有重叠（内容放不下）→ 行优先压缩重排填满，保证无滚动条、无重叠；返回是否发生调整 */
 export function fitCellsToCols(page: number, cols: number, maxRows?: number): boolean {
   const arr = layout.pages[page];
   if (!arr || cols < 1) return false;
@@ -83,6 +84,49 @@ export function fitCellsToCols(page: number, cols: number, maxRows?: number): bo
     placed.push({ x: slot.x, y: slot.y, w, h });
     changed = true;
     moved += 1;
+  }
+  // 仍有单元超出最大行数，或存在重叠（内容放不下）→ 行优先压缩重排（无滚动条、无重叠）
+  if (rows) {
+    const maxBottom = arr.reduce(
+      (m, c) => Math.max(m, (c.y ?? 0) + (c.kind === "folder" ? 1 : c.size.h)),
+      0,
+    );
+    const hasOverlap = (() => {
+      const seen: { x: number; y: number; w: number; h: number }[] = [];
+      for (const c of arr) {
+        const r = {
+          x: c.x ?? 0,
+          y: c.y ?? 0,
+          w: c.kind === "folder" ? 1 : c.size.w,
+          h: c.kind === "folder" ? 1 : c.size.h,
+        };
+        if (seen.some((p) => rectsOverlap(p, r))) return true;
+        seen.push(r);
+      }
+      return false;
+    })();
+    if (maxBottom > rows || hasOverlap) {
+      const repacked: { x: number; y: number; w: number; h: number }[] = [];
+      // 大块优先（高、宽降序），小块填空隙，保证能压缩进 rows 行
+      const ordered = [...arr].sort((a, b) => {
+        const ha = a.kind === "folder" ? 1 : a.size.h;
+        const hb = b.kind === "folder" ? 1 : b.size.h;
+        if (hb !== ha) return hb - ha;
+        const wa = a.kind === "folder" ? 1 : a.size.w;
+        const wb = b.kind === "folder" ? 1 : b.size.w;
+        return wb - wa;
+      });
+      for (const cell of ordered) {
+        const w = cell.kind === "folder" ? 1 : cell.size.w;
+        const h = cell.kind === "folder" ? 1 : cell.size.h;
+        const slot = findFreeSlot(repacked, cols, w, h, rows);
+        if (slot.x !== (cell.x ?? 0) || slot.y !== (cell.y ?? 0)) changed = true;
+        cell.x = slot.x;
+        cell.y = slot.y;
+        repacked.push({ x: slot.x, y: slot.y, w, h });
+      }
+      moved += 1;
+    }
   }
   if (moved > 0)
     log.info(

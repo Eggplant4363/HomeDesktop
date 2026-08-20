@@ -30,14 +30,18 @@ export function findFreeSlot(
   h: number,
   maxRows = 500,
 ): { x: number; y: number } {
-  for (let y = 0; y < maxRows; y++) {
-    for (let x = 0; x < cols; x++) {
-      if (x + w > cols) continue;
-      const r: Rect = { x, y, w, h };
-      if (!occupied.some((o) => rectsOverlap(r, o))) return { x, y };
+  const scan = (rows: number): { x: number; y: number } | null => {
+    for (let y = 0; y < rows; y++) {
+      if (y + h > rows) continue;
+      for (let x = 0; x < cols; x++) {
+        if (x + w > cols) continue;
+        const r: Rect = { x, y, w, h };
+        if (!occupied.some((o) => rectsOverlap(r, o))) return { x, y };
+      }
     }
-  }
-  return { x: 0, y: 0 };
+    return null;
+  };
+  return scan(maxRows) ?? scan(5000) ?? { x: 0, y: 0 };
 }
 
 /** 单元 → 占位矩形（缺坐标视为 0,0；缺 size 视为 1x1） */
