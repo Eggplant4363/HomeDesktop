@@ -33,6 +33,7 @@ corepack pnpm tauri build
 
 ## 本机环境要点（重要，都是踩过的坑）
 
+0. **【重大教训】绝不可按名字杀 node 进程！** `Stop-Process -Name node` 会把托管 **DeepSeek Harness 网页界面（端口 3080）的进程**也杀掉 → 会话直接断（"localhost 拒绝连接"、"电脑好像重启了"都可能是它）。处理进程**只按具体 PID**（先 `Get-NetTCPConnection -LocalPort X` 查归属再动）
 1. **npm 不可用**（Node 24 移除了 zlib.Zlib，npm 11 的 minizlib 崩溃）→ 一律用 **corepack pnpm**（`COREPACK_HOME` 指向仓库内 `.corepack/`）
 2. **无 MSVC** → Rust **GNU 工具链** + **w64devkit GCC**（`.toolchain/wdk/`）；`.cargo/config.toml` 指定 `target = "x86_64-pc-windows-gnu"` + `linker = "gcc"`；项目目录 rustup override
 3. **w64devkit 缺 libgcc_eh.a** → 已创建空库 + 全 profile `panic = "abort"`（workspace 根 `Cargo.toml`）
@@ -40,6 +41,8 @@ corepack pnpm tauri build
 5. **测试 exe 无法运行**（无 manifest → comctl32 v5 缺 v6 API）→ 纯逻辑已拆到 `crates/homedesktop-core` 独立测试；`cargo test`（src-tauri 壳）不要跑
 6. crates 走 rsproxy 镜像（`.cargo/config.toml`）；GitHub 慢可走 ghfast.top 或代理 `10.10.1.2:7890`
 7. tauri 的 `beforeDevCommand`/`beforeBuildCommand` 用 `node scripts/run-pnpm.cjs`（本地找 .corepack，CI 回退 PATH 中的 pnpm）
+8. **dev 模式**：vite 在 **1420**，`pnpm tauri dev` 需保持后台运行；应用**开机自启拉起的是 dev 版**，dev server 不在时 WebView 显示"localhost 拒绝连接"→ 日常用**发布版安装包**（无需 dev server）；重启电脑后需重新 `corepack pnpm tauri dev`
+9. **版本策略**（用户授权自主决定）：小功能/修复 → 小版本（patch）；大的功能变更 → 大版本（minor/major）；流程固定：release/x.y.z 分支 → 版本号 → 合并 → 标签 → CI → 草稿 Release
 
 ## 明天的候选方向（P2，未做）
 
