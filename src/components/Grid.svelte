@@ -363,7 +363,7 @@
         <div
           class="drop-wrap"
           class:dragging={isDragging}
-          class:just-added={highlightId === cell.id}
+          class:just-added={highlightId === cell.id && appearance.effects.iconAdd}
           class:folder-over={isFolderOver}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
@@ -380,7 +380,7 @@
         <div
           class="drop-wrap"
           class:dragging={isDragging}
-          class:just-added={highlightId === cell.id}
+          class:just-added={highlightId === cell.id && appearance.effects.iconAdd}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
         >
@@ -397,7 +397,7 @@
         <div
           class="drop-wrap"
           class:dragging={isDragging}
-          class:just-added={highlightId === cell.id}
+          class:just-added={highlightId === cell.id && appearance.effects.iconAdd}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
         >
@@ -452,11 +452,9 @@
   .drop-wrap.dragging {
     transition: none;
   }
-  /* 新添加图标特效：弹出 + 光环扩散（highlightId 由 App 在添加时设置，1.6s 后清除） */
+  /* 新添加图标特效：缩放弹出（highlightId 由 App 在添加时设置，1.6s 后清除；可在设置 → 特效 关闭） */
   .drop-wrap.just-added {
-    animation:
-      just-added-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both,
-      just-added-glow 1.1s ease-out 0.05s both;
+    animation: just-added-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
   }
   @keyframes just-added-pop {
     0% {
@@ -470,14 +468,6 @@
     100% {
       transform: scale(1);
       opacity: 1;
-    }
-  }
-  @keyframes just-added-glow {
-    0% {
-      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
-    }
-    100% {
-      box-shadow: 0 0 0 22px transparent;
     }
   }
   .drop-wrap.folder-over {

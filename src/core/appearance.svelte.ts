@@ -15,6 +15,8 @@ export const appearance = $state<{
   backgrounds: Record<Theme, Background>;
   tileSize: number;
   theme: Theme;
+  /** 特效开关（设置 → 特效）：添加图标弹出动画等 */
+  effects: { iconAdd: boolean };
 }>({
   backgrounds: {
     dark: { kind: "color", value: "#10141c" },
@@ -22,6 +24,7 @@ export const appearance = $state<{
   },
   tileSize: 84,
   theme: "dark",
+  effects: { iconAdd: true },
 });
 
 /** 当前主题对应的背景（函数内读取 $state，模板中调用仍保持响应式） */
@@ -49,6 +52,7 @@ export async function loadAppearance(): Promise<void> {
       background?: Background; // 旧版单背景（迁移用）
       tileSize?: number;
       theme?: Theme;
+      effects?: { iconAdd?: boolean };
     };
     // 新版：按主题分背景
     if (r.backgrounds && isBackground(r.backgrounds.dark) && isBackground(r.backgrounds.light)) {
@@ -64,6 +68,9 @@ export async function loadAppearance(): Promise<void> {
     if (r.theme === "dark" || r.theme === "light") {
       appearance.theme = r.theme;
     }
+    if (r.effects && typeof r.effects.iconAdd === "boolean") {
+      appearance.effects.iconAdd = r.effects.iconAdd;
+    }
   }
   applyTheme();
 }
@@ -76,6 +83,7 @@ export async function saveAppearance(): Promise<void> {
     },
     tileSize: appearance.tileSize,
     theme: appearance.theme,
+    effects: appearance.effects,
   });
 }
 

@@ -679,6 +679,14 @@
     log.info(`切换主题: ${theme}`);
   }
 
+  /** 特效开关：添加图标弹出动画 */
+  function handleToggleIconAddEffect(): void {
+    appearance.effects.iconAdd = !appearance.effects.iconAdd;
+    void saveAppearance();
+    log.info(`添加图标特效: ${appearance.effects.iconAdd ? "开启" : "关闭"}`);
+    toast(`添加图标特效已${appearance.effects.iconAdd ? "开启" : "关闭"}`);
+  }
+
   function handleSetTileSize(size: number): void {
     appearance.tileSize = size;
     void saveAppearance();
@@ -880,6 +888,15 @@
           {#if getCurrentBackground().kind === "image"}
             <div class="wallpaper-hint">当前：{getCurrentBackground().value.split(/[\\/]/).pop()}</div>
           {/if}
+        </div>
+
+        <div class="set-section">
+          <div class="set-label">特效</div>
+          <button class="wallpaper-btn" onclick={handleToggleIconAddEffect}>
+            {appearance.effects.iconAdd
+              ? "✅ 添加图标弹出特效已开启（点击关闭）"
+              : "⛔ 添加图标弹出特效已关闭（点击开启）"}
+          </button>
         </div>
 
         <div class="set-section">
