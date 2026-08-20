@@ -28,6 +28,8 @@
     onflipnext,
     onfitted,
     onblankclick,
+    /** 新添加的单元 id：播放"弹出 + 光环"入场特效（无则不高亮） */
+    highlightId = null,
   }: {
     cells: Cell[];
     queryText?: string;
@@ -40,6 +42,7 @@
     onmoveicon?: (iconId: string) => void;
     onresize?: (iconId: string) => void;
     onsettings?: (cellId: string) => void;
+    highlightId?: string | null;
     /** 自由摆放落点：dragId 放到 (x, y) 网格坐标 */
     ondropat?: (dragId: string, x: number, y: number) => void;
     ondropinto?: (dragId: string, folderId: string) => void;
@@ -360,6 +363,7 @@
         <div
           class="drop-wrap"
           class:dragging={isDragging}
+          class:just-added={highlightId === cell.id}
           class:folder-over={isFolderOver}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
@@ -376,6 +380,7 @@
         <div
           class="drop-wrap"
           class:dragging={isDragging}
+          class:just-added={highlightId === cell.id}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
         >
@@ -392,6 +397,7 @@
         <div
           class="drop-wrap"
           class:dragging={isDragging}
+          class:just-added={highlightId === cell.id}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
         >
@@ -445,6 +451,34 @@
   }
   .drop-wrap.dragging {
     transition: none;
+  }
+  /* 新添加图标特效：弹出 + 光环扩散（highlightId 由 App 在添加时设置，1.6s 后清除） */
+  .drop-wrap.just-added {
+    animation:
+      just-added-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+      just-added-glow 1.1s ease-out 0.05s both;
+  }
+  @keyframes just-added-pop {
+    0% {
+      transform: scale(0.15);
+      opacity: 0;
+    }
+    70% {
+      transform: scale(1.08);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  @keyframes just-added-glow {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
+    }
+    100% {
+      box-shadow: 0 0 0 22px transparent;
+    }
   }
   .drop-wrap.folder-over {
     outline: 3px solid var(--accent);

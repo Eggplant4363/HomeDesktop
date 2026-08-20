@@ -69,6 +69,14 @@
   import PluginsPanel from "./components/PluginsPanel.svelte";
 
   let showAdd = $state(false);
+  /** 新添加图标的 id（Grid 播放入场特效：弹出 + 光环），1.6s 后清除 */
+  let addedFlashId = $state<string | null>(null);
+  function flashAdded(id: string): void {
+    addedFlashId = id;
+    setTimeout(() => {
+      if (addedFlashId === id) addedFlashId = null;
+    }, 1600);
+  }
   let showSettings = $state(false);
   /** 系统应用面板（内置「系统应用」插件点击后打开） */
   let showSystemApps = $state(false);
@@ -288,6 +296,7 @@
           currentPage.index = placedPage;
           log.info(`新图标在第 ${placedPage + 1} 页，已自动跳转`);
         }
+        flashAdded(icon.id);
       }
       persist();
       showAdd = false;
@@ -328,6 +337,7 @@
       currentPage.index = page;
       log.info(`新文件夹在第 ${page + 1} 页，已自动跳转`);
     }
+    flashAdded(id);
     log.info(`新建文件夹: ${name} (${id})`);
   }
 
@@ -1213,6 +1223,7 @@
       <Grid
         cells={layout.pages[currentPage.index] ?? []}
         queryText={query.text}
+        highlightId={addedFlashId}
         onlaunch={(id) => handleLaunch(id)}
         ondelete={(id) => handleDelete(id)}
         onaddclick={() => (showAdd = true)}
