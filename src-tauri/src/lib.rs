@@ -1,4 +1,29 @@
 mod apps;
+#[cfg(windows)]
+mod media;
+#[cfg(not(windows))]
+mod media {
+    // 非 Windows 平台无 SMTC：命令返回不支持提示
+    use serde::Serialize;
+    #[derive(Debug, Clone, Default, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct MediaInfo {
+        pub title: String,
+        pub artist: String,
+        pub album: String,
+        pub app: String,
+        pub state: String,
+        pub thumbnail: Option<String>,
+    }
+    #[tauri::command]
+    pub fn media_now_playing() -> Result<MediaInfo, String> {
+        Err("当前平台不支持媒体控制".into())
+    }
+    #[tauri::command]
+    pub fn media_control(_action: String) -> Result<(), String> {
+        Err("当前平台不支持媒体控制".into())
+    }
+}
 mod backup;
 mod config;
 mod log;
@@ -88,6 +113,8 @@ pub fn run() {
             apps::apps_scan,
             apps::app_icon,
             apps::launch_path,
+            media::media_now_playing,
+            media::media_control,
             stats::sys_stats,
             backup::backup_export,
             backup::backup_import,

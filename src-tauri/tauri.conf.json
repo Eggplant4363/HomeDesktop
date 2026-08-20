@@ -46,7 +46,8 @@
       "resources/plugins/weather",
       "resources/plugins/calendar",
       "resources/plugins/sysmonitor",
-      "resources/plugins/todo"
+      "resources/plugins/todo",
+      "resources/plugins/music"
     ],
     "windows": {
       "nsis": {
