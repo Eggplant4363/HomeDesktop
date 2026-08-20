@@ -1,7 +1,7 @@
 // 全局状态（Svelte 5 runes 模块）
 import type { Cell, IconCell, Layout, PluginInfo } from "./types";
 import { log } from "./logger";
-import { activePageCols, cellRect, findFreeSlot, FOLDER_COLS, rectsOverlap } from "./layout";
+import { activePageCols, activePageRows, cellRect, findFreeSlot, FOLDER_COLS, rectsOverlap } from "./layout";
 
 export const plugins = $state<PluginInfo[]>([]);
 export const layout = $state<Layout>({ version: 3, pages: [[]] });

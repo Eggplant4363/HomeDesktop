@@ -16,6 +16,7 @@
   - 新增单元 `addCell`：当前页放不下 → 自动放到下一页（手机桌面习惯）
   - Grid 度量同步 `activePageRows`（视口可容纳行数）到 stores；网格容器 `overflow-y: hidden` 硬性兜底（拖拽瞬间越界只裁剪、绝不显示滚动条）
 - **验证**：重启后仅 1 次适配 + 1 次保存（此前旧压缩逻辑启动时循环 10+ 次不收敛）；第 1 页 16 个单元 maxBottom=4 全部在视口内，多出的日历组件自动移到第 2 页
+- **后续修复**：添加小组件"点了没反应"——`addCell` 引用 `activePageRows` 但漏 import（vite dev 不做类型检查，svelte-check 才暴露）；已补 import 并给 handleAdd 加 try/catch + toast + 全局 JS 错误捕获（main.ts），今后任何前端运行时错误都会写入日志便于定位
 ## 2026-02-13（发布 v0.4.1：网页图标缓存与稳定性修复）✅
 
 - **内容**（自 v0.4.0）：

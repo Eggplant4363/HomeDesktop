@@ -270,25 +270,31 @@
   }
 
   function handleAdd(plugin: PluginInfo): void {
-    const def = plugin.pluginType === "widget" ? getWidgetDef(plugin.widgetComponent) : undefined;
-    const icon: IconCell = {
-      kind: "icon",
-      id: crypto.randomUUID(),
-      pluginId: plugin.id,
-      title: plugin.name,
-      size: plugin.sizes?.[0] ?? def?.defaultSize ?? { w: 1, h: 1 },
-    };
-    if (openFolder.folderId) {
-      addIconToFolder(openFolder.folderId, icon);
-    } else {
-      addCell(icon);
+    try {
+      const def =
+        plugin.pluginType === "widget" ? getWidgetDef(plugin.widgetComponent) : undefined;
+      const icon: IconCell = {
+        kind: "icon",
+        id: crypto.randomUUID(),
+        pluginId: plugin.id,
+        title: plugin.name,
+        size: plugin.sizes?.[0] ?? def?.defaultSize ?? { w: 1, h: 1 },
+      };
+      if (openFolder.folderId) {
+        addIconToFolder(openFolder.folderId, icon);
+      } else {
+        addCell(icon);
+      }
+      persist();
+      showAdd = false;
+      log.info(`添加图标: ${plugin.name} (${icon.size.w}x${icon.size.h})`);
+      // 网页快捷方式：自动获取网站标题作为图标名
+      const urlDefault = plugin.settings?.find((s) => s.key === "url")?.default;
+      if (urlDefault) void refreshWebTitle(icon.id, String(urlDefault));
+    } catch (e) {
+      log.error(`添加图标失败: ${plugin.id} -> ${e}`);
+      toast(`添加失败: ${e}`);
     }
-    persist();
-    showAdd = false;
-    log.info(`添加图标: ${plugin.name} (${icon.size.w}x${icon.size.h})`);
-    // 网页快捷方式：自动获取网站标题作为图标名
-    const urlDefault = plugin.settings?.find((s) => s.key === "url")?.default;
-    if (urlDefault) void refreshWebTitle(icon.id, String(urlDefault));
   }
 
   /** 网页快捷方式：拉取网站标题并设为图标名（失败保持原名称） */
