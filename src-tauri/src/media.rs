@@ -197,19 +197,31 @@ fn control(action: &str) -> Result<(), String> {
                     .map_err(|e| format!("播放等待失败: {e}"))?;
             }
         }
-        "next" => {
-            session
-                .TrySkipNextAsync()
-                .map_err(|e| format!("下一曲失败: {e}"))?
-                .get()
-                .map_err(|e| format!("下一曲等待失败: {e}"))?;
-        }
-        "previous" => {
-            session
-                .TrySkipPreviousAsync()
-                .map_err(|e| format!("上一曲失败: {e}"))?
-                .get()
-                .map_err(|e| format!("上一曲等待失败: {e}"))?;
+        "next" | "previous" => {
+            let ok = if action == "next" {
+                session
+                    .TrySkipNextAsync()
+                    .map_err(|e| format!("下一曲失败: {e}"))?
+                    .get()
+                    .map_err(|e| format!("下一曲等待失败: {e}"))?
+            } else {
+                session
+                    .TrySkipPreviousAsync()
+                    .map_err(|e| format!("上一曲失败: {e}"))?
+                    .get()
+                    .map_err(|e| format!("上一曲等待失败: {e}"))?
+            };
+            if !ok {
+                return Err("播放器拒绝了跳曲请求".into());
+            }
+            // 部分播放器 SMTC 跳曲后会自动暂停：若跳曲前在播放，补发一次播放命令恢复自动播放
+            if is_playing {
+                session
+                    .TryPlayAsync()
+                    .map_err(|e| format!("恢复播放失败: {e}"))?
+                    .get()
+                    .map_err(|e| format!("恢复播放等待失败: {e}"))?;
+            }
         }
         _ => return Err(format!("未知控制动作: {action}")),
     }
