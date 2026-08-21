@@ -204,6 +204,14 @@
       return;
     }
     if (pointerId === null || pointerId !== e.pointerId) return;
+    // 未按住任何键（鼠标悬停 / 残留状态）→ 清理并忽略，绝不触发滑动
+    if (e.buttons === 0) {
+      swipeActive = false;
+      swipeRawDx = 0;
+      pointerId = null;
+      dragCandidate = null;
+      return;
+    }
     // 正常模式：左右滑动切换页面（鼠标左键按住拖动 / 触屏滑动）
     if (!ui.editMode) {
       const dx = e.clientX - startX;
@@ -253,6 +261,7 @@
       swipeRawDx = 0;
       const pid = pointerId;
       pointerId = null;
+      dragCandidate = null;
       try {
         gridEl?.releasePointerCapture(pid!);
       } catch {
@@ -261,7 +270,12 @@
       onswipeend?.(dx);
       return;
     }
-    if (!dragging) return;
+    if (!dragging) {
+      // 普通点击：同样清理指针状态，避免残留导致"没按住鼠标页面跟着滑动"
+      pointerId = null;
+      dragCandidate = null;
+      return;
+    }
     e.preventDefault();
     if (overFolderId && overFolderId !== draggingId) {
       ondropinto?.(draggingId!, overFolderId);
@@ -276,6 +290,8 @@
     clearLongPress();
     swipeActive = false;
     swipeRawDx = 0;
+    pointerId = null;
+    dragCandidate = null;
     if (dragging) endDrag();
   }
 
