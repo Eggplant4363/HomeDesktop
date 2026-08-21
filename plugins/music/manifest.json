@@ -6,9 +6,9 @@
   "emoji": "🎵",
   "widgetComponent": "music",
   "sizes": [
+    { "w": 2, "h": 1 },
     { "w": 3, "h": 1 },
-    { "w": 4, "h": 1 },
-    { "w": 6, "h": 1 }
+    { "w": 5, "h": 1 }
   ],
   "settings": [],
   "actions": []
