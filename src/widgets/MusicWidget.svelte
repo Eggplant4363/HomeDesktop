@@ -76,9 +76,7 @@
     <div class="meta">
       <div class="title" title={info.title}>{info.title || "未知曲目"}</div>
       <div class="artist" title={info.artist}>{info.artist || (info.album ? `专辑 · ${info.album}` : "—")}</div>
-      {#if info.app}
-        <div class="app">{info.app.split("!").pop()}</div>
-      {/if}
+
     </div>
     <div class="controls">
       <button
@@ -109,56 +107,48 @@
     height: 100%;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 10px;
+    gap: 10px;
+    padding: 6px 8px;
     box-sizing: border-box;
   }
   .cover-wrap {
     flex-shrink: 0;
-    width: 64px;
-    height: 64px;
+    width: 38px;
+    height: 38px;
   }
   .cover {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 12px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+    border-radius: 9px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     display: block;
   }
   .cover.fallback {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 30px;
+    font-size: 18px;
     background: color-mix(in srgb, var(--accent) 18%, transparent);
-    border-radius: 12px;
+    border-radius: 9px;
   }
   .meta {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 1px;
   }
   .title {
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .artist {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--fg-dim);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .app {
-    font-size: 10px;
-    color: var(--fg-dim);
-    opacity: 0.7;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -170,13 +160,13 @@
     gap: 4px;
   }
   .ctrl {
-    width: 30px;
-    height: 30px;
+    width: 26px;
+    height: 26px;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
     background: var(--bg-hover);
     color: var(--fg);
-    font-size: 14px;
+    font-size: 12px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -187,9 +177,9 @@
     background: color-mix(in srgb, var(--accent) 25%, transparent);
   }
   .ctrl.main {
-    width: 36px;
-    height: 36px;
-    font-size: 15px;
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
     background: var(--accent);
     color: #fff;
   }

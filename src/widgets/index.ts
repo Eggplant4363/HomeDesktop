@@ -18,7 +18,7 @@ export const widgetRegistry: Record<string, WidgetDef> = {
   calendar: { component: CalendarWidget, defaultSize: { w: 2, h: 2 } },
   sysmonitor: { component: SysMonitorWidget, defaultSize: { w: 2, h: 1 } },
   todo: { component: TodoWidget, defaultSize: { w: 2, h: 2 } },
-  music: { component: MusicWidget, defaultSize: { w: 3, h: 2 } },
+  music: { component: MusicWidget, defaultSize: { w: 4, h: 1 } },
 };
 
 export function getWidgetDef(component: string | undefined): WidgetDef | undefined {
