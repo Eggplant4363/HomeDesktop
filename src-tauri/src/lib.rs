@@ -143,7 +143,6 @@ pub fn run() {
             media::media_control,
             ime::ime_save,
             ime::ime_restore,
-            apply_workarea,
             stats::sys_stats,
             backup::backup_export,
             backup::backup_import,
@@ -166,50 +165,14 @@ pub(crate) fn toggle_pad(app: &tauri::AppHandle) {
                 let _ = app.emit("hide-window", ());
             }
             _ => {
-                log::debug("Pad 开关: 隐藏 → 显示");
+                log::debug("Pad 开关: 隐藏 → 显示全屏");
                 let _ = win.show();
+                let _ = win.set_fullscreen(true);
                 let _ = win.set_focus();
                 let _ = app.emit("show-window", ());
             }
         }
     }
-}
-
-/// 窗口尺寸 = 工作区（屏幕减去任务栏）：无边框铺满可用区域，任务栏始终可见，
-/// 显示/隐藏不会影响任务栏/托盘图标位（区别于 fullscreen 覆盖任务栏）
-#[tauri::command]
-fn apply_workarea(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Manager;
-    if let Some(win) = app.get_webview_window("main") {
-        #[cfg(windows)]
-        {
-            use windows::Win32::Foundation::RECT;
-            use windows::Win32::UI::WindowsAndMessaging::{
-                SystemParametersInfoW, SPI_GETWORKAREA, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
-            };
-            unsafe {
-                let mut wa = RECT::default();
-                let ok = SystemParametersInfoW(
-                    SPI_GETWORKAREA,
-                    0,
-                    Some(&mut wa as *mut _ as *mut core::ffi::c_void),
-                    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
-                );
-                if ok.is_ok() {
-                    let w = (wa.right - wa.left) as f64;
-                    let h = (wa.bottom - wa.top) as f64;
-                    let _ = win.set_position(tauri::PhysicalPosition::new(0.0, 0.0));
-                    let _ = win.set_size(tauri::PhysicalSize::new(w, h));
-                    log::debug(&format!("工作区窗口: {w:.0}x{h:.0}"));
-                }
-            }
-        }
-        #[cfg(not(windows))]
-        {
-            let _ = win.maximize();
-        }
-    }
-    Ok(())
 }
 
 fn toggle_window(app: &tauri::AppHandle) {

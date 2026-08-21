@@ -18,7 +18,7 @@
         "minWidth": 640,
         "minHeight": 480,
         "resizable": false,
-        "fullscreen": false,
+        "fullscreen": true,
         "decorations": false,
         "skipTaskbar": true
       }

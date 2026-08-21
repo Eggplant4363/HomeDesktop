@@ -176,8 +176,11 @@
     autoStart = await autostartEnabled();
     void loadProxy();
 
-    // ---------- 窗口尺寸 = 工作区（屏幕减去任务栏；任务栏始终可见，显示/隐藏不影响图标位） ----------
-    invoke("apply_workarea").catch((e) => log.error(`设置工作区窗口失败: ${e}`));
+    // ---------- 全屏模式（tauri.conf.json fullscreen: true，此处兜底） ----------
+    const win = getCurrentWindow();
+    void win.setFullscreen(true).catch(() => {
+      /* 窗口已全屏时该调用可能不 resolve，故不阻塞启动 */
+    });
     window.addEventListener("keydown", handleGlobalKeydown);
 
     // ---------- 快捷键（M7/M10） ----------
