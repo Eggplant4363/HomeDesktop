@@ -20,6 +20,10 @@
 
   // 曲目变化 → 重新获取歌词
   let trackKey = "";
+  // 防抖：AmcfyMusic 等播放器切歌时标题会短暂横跳（如 "……" ↔ 真标题），
+  // 连续 2 次轮询（2s）看到同一个新标题才触发重新获取
+  let lastTitle = "";
+  let stableCount = 0;
 
   async function loadLyrics(): Promise<void> {
     const t = lyrics.track;
@@ -51,17 +55,25 @@
         duration: number;
         thumbnail: string | null;
       }>("media_now_playing");
-      // 歌曲变化：更新曲目信息并重新获取歌词
+      // 歌曲变化：标题连续 2 次稳定为同一新值才更新曲目并重新获取歌词（防横跳）
       const t = lyrics.track;
-      if (data.title && data.title !== t.title) {
-        lyrics.track = {
-          title: data.title,
-          artist: data.artist,
-          album: t.album,
-          duration: data.duration || t.duration,
-        };
-        result = null;
-        void loadLyrics();
+      if (data.title) {
+        if (data.title === lastTitle) {
+          stableCount++;
+        } else {
+          lastTitle = data.title;
+          stableCount = 1;
+        }
+        if (data.title !== t.title && stableCount >= 2) {
+          lyrics.track = {
+            title: data.title,
+            artist: data.artist,
+            album: t.album,
+            duration: data.duration || t.duration,
+          };
+          result = null;
+          void loadLyrics();
+        }
       }
       position = data.position ?? 0;
       if (data.thumbnail) thumbnail = data.thumbnail;

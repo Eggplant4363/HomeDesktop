@@ -25,6 +25,22 @@ export interface TrackRef {
 const cache = new Map<string, LyricsResult>();
 
 const LRCLIB_BASE = "https://lrclib.net/api";
+/** 请求超时（网络不可达时不永久转圈） */
+const FETCH_TIMEOUT = 8000;
+
+async function fetchJson(url: string): Promise<unknown | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /** 获取歌词（按 标题/歌手/专辑/时长 精确匹配；失败或未找到返回 null） */
 export async function fetchLyrics(track: TrackRef): Promise<LyricsResult | null> {
@@ -51,12 +67,12 @@ async function getExact(track: TrackRef): Promise<LyricsResult | null> {
   url.searchParams.set("artist_name", track.artist);
   url.searchParams.set("album_name", track.album);
   if (track.duration > 0) url.searchParams.set("duration", String(Math.round(track.duration)));
-  const res = await fetch(url.toString());
-  if (!res.ok) return null;
-  const data = await res.json();
+  const raw = await fetchJson(url.toString());
+  if (!raw) return null;
+  const data = raw as Record<string, unknown>;
   return {
-    synced: parseLrc(data.syncedLyrics ?? ""),
-    plain: data.plainLyrics ?? null,
+    synced: parseLrc((data.syncedLyrics as string) ?? ""),
+    plain: (data.plainLyrics as string) ?? null,
     instrumental: !!data.instrumental,
   };
 }
@@ -66,9 +82,7 @@ async function searchBest(track: TrackRef): Promise<LyricsResult | null> {
   const url = new URL(LRCLIB_BASE + "/search");
   if (track.title) url.searchParams.set("track_name", track.title);
   if (track.artist) url.searchParams.set("artist_name", track.artist);
-  const res = await fetch(url.toString());
-  if (!res.ok) return null;
-  const list = await res.json();
+  const list = (await fetchJson(url.toString())) as unknown;
   if (!Array.isArray(list) || list.length === 0) return null;
   const target = track.duration || 0;
   let best: Record<string, unknown> | null = null;
