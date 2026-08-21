@@ -107,9 +107,13 @@ pub fn run() {
                             GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, WS_EX_TOOLWINDOW,
                         };
                         unsafe {
+                            const WS_EX_APPWINDOW: i32 = 0x00040000;
                             let hw = HWND(hwnd.0);
                             let ex = GetWindowLongW(hw, GWL_EXSTYLE);
-                            SetWindowLongW(hw, GWL_EXSTYLE, ex | WS_EX_TOOLWINDOW.0 as i32);
+                            // 清除 WS_EX_APPWINDOW（强制任务栏按钮）再设 WS_EX_TOOLWINDOW：
+                            // 两者并存时 APPWINDOW 优先，任务栏按钮仍会出现
+                            let ex = (ex & !WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW.0 as i32;
+                            SetWindowLongW(hw, GWL_EXSTYLE, ex);
                         }
                     }
                 }
