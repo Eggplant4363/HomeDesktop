@@ -94,6 +94,25 @@ pub fn run() {
                 builder = builder.icon(icon.clone());
             }
             builder.build(app)?;
+            // 任务栏不显示图标（全屏启动器用托盘控制，避免显示/隐藏时任务栏按钮抖动）：
+            // 直接设置 WS_EX_TOOLWINDOW 确保生效（tauri skipTaskbar 配置/API 在 wry 上未实际改样式）
+            #[cfg(windows)]
+            {
+                use tauri::Manager;
+                if let Some(win) = app.get_webview_window("main") {
+                    if let Ok(hwnd) = win.hwnd() {
+                        use windows::Win32::Foundation::HWND;
+                        use windows::Win32::UI::WindowsAndMessaging::{
+                            GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, WS_EX_TOOLWINDOW,
+                        };
+                        unsafe {
+                            let hw = HWND(hwnd.0);
+                            let ex = GetWindowLongW(hw, GWL_EXSTYLE);
+                            SetWindowLongW(hw, GWL_EXSTYLE, ex | WS_EX_TOOLWINDOW.0 as i32);
+                        }
+                    }
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -163,6 +163,13 @@
   );
 
   onMount(async () => {
+    // 任务栏不显示图标（全屏启动器用托盘控制，避免显示/隐藏时任务栏按钮抖动）
+    try {
+      await getCurrentWindow().setSkipTaskbar(true);
+      log.debug("已设置任务栏隐藏（skipTaskbar）");
+    } catch (e) {
+      log.error(`设置任务栏隐藏失败: ${e}`);
+    }
     await Promise.all([loadPlugins(), loadLayout(), loadAppearance()]);
     customColor =
       getCurrentBackground().kind === "color" ? getCurrentBackground().value : "#10141c";

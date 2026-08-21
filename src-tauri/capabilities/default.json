@@ -8,6 +8,7 @@
     "core:window:allow-set-fullscreen",
     "core:window:allow-is-fullscreen",
     "core:window:allow-hide",
+    "core:window:allow-set-skip-taskbar",
     "global-shortcut:default",
     "dialog:default",
     "autostart:default",

@@ -14,6 +14,7 @@
   - **修复**：应用显示后未按住鼠标页面跟着滑动——指针状态残留（普通点击/窗口隐藏/pointercancel 未清理 pointerId），pointermove 增加 `e.buttons === 0` 守卫 + 完整重置
   - **在线市场索引更新**：音乐控制插件上架（DEFAULT_INDEX_URL → HomeDesktopPlugins@37220b5）
 - **发布流程**：release/v0.5.1 分支 → 版本号 0.5.0→0.5.1 → 合并回 main → 打标签 v0.5.1 → CI 自动构建并创建草稿 Release
+- **后续优化**（用户反馈）：任务栏按钮随窗口显示/隐藏出现/消失且比动画慢半拍 → 直接在 Rust 设置 **WS_EX_TOOLWINDOW**（tauri skipTaskbar 配置/API 在 wry 上未实际生效）；全屏启动器由托盘/快捷键控制，任务栏与 Alt-Tab 均不再出现该窗口
 ## 2026-02-13（发布 v0.5.0：音乐控制 + 歌词 + 滑动切页等）✅
 
 - **内容**（自 v0.4.1）：
