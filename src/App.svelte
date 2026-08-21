@@ -242,6 +242,8 @@
   /** 隐藏本应用窗口（启动外部应用/网页后、或点击空白区域时；Alt+Space/托盘可再唤出）
    *  特效开启：先播 200ms 淡出缩放，动画结束再真正隐藏；关闭：立即隐藏 */
   function hideWindow(): void {
+    // 保存输入法状态（显示时恢复，避免焦点切换导致中/英输入法转变）
+    invoke("ime_save").catch(() => {});
     if (!appearance.effects.windowAnim) {
       const win = getCurrentWindow();
       win
@@ -266,6 +268,8 @@
   function showWindow(): void {
     windowHidden = false;
     log.debug("显示应用窗口（淡入）");
+    // 恢复输入法状态（隐藏前保存的，避免中/英输入法被重置）
+    invoke("ime_restore").catch(() => {});
   }
 
   // ---------- 页面左右滑动切换（鼠标左键 / 触屏） ----------

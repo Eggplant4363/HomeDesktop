@@ -1,4 +1,5 @@
 mod apps;
+mod ime;
 #[cfg(windows)]
 mod media;
 #[cfg(not(windows))]
@@ -136,6 +137,8 @@ pub fn run() {
             apps::launch_path,
             media::media_now_playing,
             media::media_control,
+            ime::ime_save,
+            ime::ime_restore,
             stats::sys_stats,
             backup::backup_export,
             backup::backup_import,
