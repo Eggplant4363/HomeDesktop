@@ -414,7 +414,7 @@
         class:grandchild={depth >= 2}
         class:done={t.done}
         class:overdue={isOverdue(t)}
-        style="padding-left:{6 + depth * 18}px; --depth:{depth};"
+        style="padding-left:{6 + depth * 22}px; --depth:{depth};"
       >
         {#if t.children && t.children.length > 0}
           <button
@@ -422,9 +422,6 @@
             title={t.expanded === false ? "展开子任务" : "折叠子任务"}
             onclick={() => void toggleExpand(t.id)}
           >{t.expanded === false ? "▸" : "▾"}</button>
-          {#if childCount(t).total > 0}
-            <span class="child-prog" title="子任务进度">{childCount(t).done}/{childCount(t).total}</span>
-          {/if}
         {:else}
           <span class="exp-placeholder"></span>
         {/if}
@@ -458,6 +455,9 @@
             ondblclick={() => startEdit(t.id, t.text)}
             onkeydown={(e) => e.key === "Enter" && startEdit(t.id, t.text)}
           >{t.text}</span>
+        {/if}
+        {#if t.children && t.children.length > 0 && childCount(t).total > 0}
+          <span class="child-prog" title="子任务进度">{childCount(t).done}/{childCount(t).total}</span>
         {/if}
         {#if t.due}
           <button
@@ -697,11 +697,11 @@
     position: relative;
     font-size: 10px;
   }
-  /* 层级引导线：垂直引导线对齐父级的箭头列（(depth-1)*18+7px），加水平短线连接本行 */
+  /* 层级引导线：垂直引导线对齐父级的箭头列（(depth-1)*22+7px），加水平短线连接本行 */
   .item.child::before {
     content: "";
     position: absolute;
-    left: calc((var(--depth) - 1) * 18px + 7px);
+    left: calc((var(--depth) - 1) * 22px + 7px);
     top: -8px;
     bottom: 0;
     width: 2px;
@@ -712,9 +712,9 @@
   .item.child::after {
     content: "";
     position: absolute;
-    left: calc((var(--depth) - 1) * 18px + 7px);
+    left: calc((var(--depth) - 1) * 22px + 7px);
     top: 50%;
-    width: calc(var(--depth) * 18px - 2px);
+    width: calc(var(--depth) * 22px - 2px);
     height: 2px;
     border-radius: 2px;
     background: var(--border);
