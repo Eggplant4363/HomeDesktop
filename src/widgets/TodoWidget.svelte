@@ -232,8 +232,32 @@
   }
 
   // ---------- 勾选 / 删除 / 清空 ----------
+  /** 递归切换完成状态（级联语义）：
+   *  - 父任务勾选/取消 → 级联所有后代
+   *  - 子任务完成 → 其父任务在"全部子任务完成"时自动完成（逐级向上）
+   *  - 子任务取消 → 父任务自动取消（向上级联）
+   */
+  function toggleRec(list: TodoItem[], id: string): TodoItem[] {
+    return list.map((t) => {
+      if (t.id === id) {
+        const newDone = !t.done;
+        if (t.children && t.children.length > 0) {
+          const setAll = (cs: TodoItem[], d: boolean): TodoItem[] =>
+            cs.map((c) => ({ ...c, done: d, children: c.children ? setAll(c.children, d) : undefined }));
+          return { ...t, done: newDone, children: setAll(t.children, newDone) };
+        }
+        return { ...t, done: newDone };
+      }
+      if (t.children && t.children.length > 0) {
+        const children = toggleRec(t.children, id);
+        const allDone = children.every((c) => c.done);
+        return { ...t, children, done: allDone };
+      }
+      return t;
+    });
+  }
   async function toggle(id: string): Promise<void> {
-    items = updateRec(items, id, (t) => ({ ...t, done: !t.done }));
+    items = toggleRec(items, id);
     await save();
   }
   async function remove(id: string): Promise<void> {
