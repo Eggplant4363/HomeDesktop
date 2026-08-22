@@ -414,7 +414,7 @@
         class:grandchild={depth >= 2}
         class:done={t.done}
         class:overdue={isOverdue(t)}
-        style="padding-left:{6 + depth * 22}px; --depth:{depth};"
+        style="padding-left:{6 + depth * 22}px;"
       >
         {#if t.children && t.children.length > 0}
           <button
@@ -697,35 +697,7 @@
     position: relative;
     font-size: 10px;
   }
-  /* 层级引导线：垂直引导线对齐父级的箭头列（(depth-1)*22+7px），加水平短线连接本行 */
-  .item.child::before {
-    content: "";
-    position: absolute;
-    left: calc((var(--depth) - 1) * 22px + 7px);
-    top: -8px;
-    bottom: 0;
-    width: 2px;
-    border-radius: 2px;
-    background: var(--border);
-    opacity: 0.65;
-  }
-  .item.child::after {
-    content: "";
-    position: absolute;
-    left: calc((var(--depth) - 1) * 22px + 7px);
-    top: 50%;
-    width: calc(var(--depth) * 22px - 2px);
-    height: 2px;
-    border-radius: 2px;
-    background: var(--border);
-    opacity: 0.65;
-    transform: translateY(-50%);
-  }
-  .item.grandchild::before,
-  .item.grandchild::after {
-    width: 1.5px;
-    opacity: 0.4;
-  }
+  /* 层级仅靠缩进区分（用户要求去掉引导线） */
   .item.child .text {
     color: var(--fg-dim);
   }
