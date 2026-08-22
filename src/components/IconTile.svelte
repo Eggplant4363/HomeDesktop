@@ -195,6 +195,10 @@
     line-height: 1;
     cursor: pointer;
     color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
   }
   .act.move {
     background: var(--accent);

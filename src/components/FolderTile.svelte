@@ -121,6 +121,10 @@
     font-size: 12px;
     line-height: 1;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
   }
   .del {
     background: var(--danger);

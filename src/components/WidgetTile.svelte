@@ -150,6 +150,10 @@
     line-height: 1;
     cursor: pointer;
     color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
   }
   .act.resize {
     background: var(--accent);
