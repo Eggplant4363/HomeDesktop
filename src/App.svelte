@@ -88,6 +88,18 @@
   let padShortcut = $state("alt+space");
   /** 搜索唤起快捷键（M10，可配置，默认 ctrl+space） */
   let searchShortcut = $state("ctrl+space");
+  /** 快捷键注册状态（冲突警告展示） */
+  let shortcutStatus = $state<Record<string, { ok: boolean; spec?: string; error?: string }>>({});
+  async function refreshShortcutStatus(): Promise<void> {
+    try {
+      const list = await invoke<{ action: string; spec: string; ok: boolean; error?: string | null }[]>("shortcuts_status");
+      const m: Record<string, { ok: boolean; spec?: string; error?: string }> = {};
+      for (const s of list) m[s.action] = { ok: s.ok, spec: s.spec, error: s.error ?? undefined };
+      shortcutStatus = m;
+    } catch {
+      /* 忽略 */
+    }
+  }
   /** 全局搜索面板（M10） */
   let showSearch = $state(false);
   /** 正在编辑的文件夹 id（M8：重命名/换 emoji 弹窗） */
@@ -186,6 +198,7 @@
     // ---------- 快捷键（M7/M10） ----------
     padShortcut = await getToggleShortcut();
     searchShortcut = await getSearchShortcut();
+    void refreshShortcutStatus();
     // 全局搜索快捷键（Rust 事件）→ 打开/关闭搜索面板
     await listen("homedesktop:search", () => {
       log.debug("收到搜索快捷键事件");
@@ -213,6 +226,7 @@
     padShortcut = combo;
     log.info(`快捷键已修改: ${comboLabel(combo)}`);
     toast(`快捷键已改为 ${comboLabel(combo)}`);
+    void refreshShortcutStatus();
     return null;
   }
 
@@ -226,6 +240,7 @@
     searchShortcut = combo;
     log.info(`搜索快捷键已修改: ${comboLabel(combo)}`);
     toast(`搜索快捷键已改为 ${comboLabel(combo)}`);
+    void refreshShortcutStatus();
     return null;
   }
 
@@ -1033,11 +1048,17 @@
             value={padShortcut}
             onchange={handleSetPadShortcut}
           />
+          {#if shortcutStatus["togglePad"] && !shortcutStatus["togglePad"].ok}
+            <div class="sc-warn">⚠ “{shortcutStatus["togglePad"].spec}”注册失败：{shortcutStatus["togglePad"].error}，此快捷键未生效（不影响使用）</div>
+          {/if}
           <ShortcutRow
             label="打开全局搜索"
             value={searchShortcut}
             onchange={handleSetSearchShortcut}
           />
+          {#if shortcutStatus["search"] && !shortcutStatus["search"].ok}
+            <div class="sc-warn">⚠ “{shortcutStatus["search"].spec}”注册失败：{shortcutStatus["search"].error}，此快捷键未生效（不影响使用）</div>
+          {/if}
         </div>
 
         <div class="set-section">
@@ -1734,6 +1755,14 @@
   .set-label {
     font-size: 12px;
     color: var(--fg-dim);
+  }
+  .sc-warn {
+    font-size: 11px;
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    border-radius: 8px;
+    padding: 5px 8px;
+    line-height: 1.5;
   }
   .bg-presets {
     display: flex;

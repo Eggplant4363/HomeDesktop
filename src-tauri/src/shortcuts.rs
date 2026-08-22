@@ -3,8 +3,51 @@
 //! - search：唤起全局搜索面板，默认 ctrl+space（由前端监听事件打开面板）
 //! 配置存 config.json（shortcuts.<action>）；修改时动态 注册新键（失败则保持旧键）→ 注销旧键 → 持久化。
 
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use serde::Serialize;
+
+/// 快捷键注册结果（供前端展示冲突警告，不影响启动）
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShortcutStatus {
+    pub action: String,
+    pub spec: String,
+    pub ok: bool,
+    pub error: Option<String>,
+}
+
+fn status_slot() -> &'static Mutex<HashMap<String, ShortcutStatus>> {
+    static S: OnceLock<Mutex<HashMap<String, ShortcutStatus>>> = OnceLock::new();
+    S.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn record(action: &str, spec: &str, result: Result<(), String>) {
+    if let Ok(mut m) = status_slot().lock() {
+        m.insert(
+            action.to_string(),
+            ShortcutStatus {
+                action: action.to_string(),
+                spec: spec.to_string(),
+                ok: result.is_ok(),
+                error: result.err(),
+            },
+        );
+    }
+}
+
+/// 查询各快捷键注册状态（前端设置页展示冲突警告）
+#[tauri::command]
+pub fn shortcuts_status() -> Vec<ShortcutStatus> {
+    let mut v: Vec<ShortcutStatus> = Vec::new();
+    if let Ok(m) = status_slot().lock() {
+        v = m.values().cloned().collect();
+    }
+    v.sort_by(|a, b| a.action.cmp(&b.action));
+    v
+}
 
 pub const DEFAULT_TOGGLE: &str = "alt+space";
 pub const DEFAULT_SEARCH: &str = "ctrl+space";
@@ -56,12 +99,16 @@ fn register_search(app: &AppHandle, spec: &str) -> Result<(), String> {
 pub fn register_current(app: &AppHandle) {
     let toggle = load(app, TOGGLE_KEY, DEFAULT_TOGGLE);
     crate::log::info(&format!("注册全局快捷键: togglePad={toggle}"));
-    if let Err(e) = register_toggle(app, &toggle) {
+    let r1 = register_toggle(app, &toggle);
+    record("togglePad", &toggle, r1.clone());
+    if let Err(e) = r1 {
         crate::log::error(&e);
     }
     let search = load(app, SEARCH_KEY, DEFAULT_SEARCH);
     crate::log::info(&format!("注册全局快捷键: search={search}"));
-    if let Err(e) = register_search(app, &search) {
+    let r2 = register_search(app, &search);
+    record("search", &search, r2.clone());
+    if let Err(e) = r2 {
         crate::log::error(&e);
     }
 }
@@ -86,10 +133,18 @@ pub fn set_shortcut(app: &AppHandle, action: &str, spec: &str) -> Result<String,
     if spec == old {
         return Ok(spec);
     }
-    // 先注册新键：失败说明被其他应用占用，旧键保持不变
+    // 先注册新键：失败说明被其他应用占用，旧键保持不变；无论成败都记录状态供前端展示
     match action {
-        "togglePad" => register_toggle(app, &spec)?,
-        "search" => register_search(app, &spec)?,
+        "togglePad" => {
+            let r = register_toggle(app, &spec);
+            record("togglePad", &spec, r.clone());
+            r?;
+        }
+        "search" => {
+            let r = register_search(app, &spec);
+            record("search", &spec, r.clone());
+            r?;
+        }
         _ => unreachable!(),
     }
     let _ = app.global_shortcut().unregister(old.as_str());

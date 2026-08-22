@@ -147,6 +147,7 @@ pub fn run() {
             backup::backup_export,
             backup::backup_import,
             shortcuts::shortcuts_set,
+            shortcuts::shortcuts_status,
             notify::app_notify,
             log::log_write
         ])
