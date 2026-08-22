@@ -30,6 +30,11 @@ export function registerWidget<T>(mod: WidgetModule<T>): void {
   ensureScheduler();
 }
 
+/** 注销小组件模块（组件卸载时调用，避免调度器对已删除实例继续拉取） */
+export function unregisterWidget(id: string): void {
+  modules.delete(id);
+}
+
 export function getWidgetData<T>(id: string): T | undefined {
   return widgetCache[id]?.data as T | undefined;
 }

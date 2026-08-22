@@ -3,6 +3,7 @@
   import Grid from "./components/Grid.svelte";
   import FolderView from "./components/FolderView.svelte";
   import PluginSettingsMenu from "./components/PluginSettingsMenu.svelte";
+  import HaSettingsMenu from "./components/HaSettingsMenu.svelte";
   import SearchBar from "./components/SearchBar.svelte";
   import AddMenu from "./components/AddMenu.svelte";
   import SystemAppsPanel from "./components/SystemAppsPanel.svelte";
@@ -825,6 +826,12 @@
     toast(`窗口过渡特效已${appearance.effects.windowAnim ? "开启" : "关闭"}`);
   }
 
+  /** 网格间距滑块 */
+  function handleSetGridSpacing(v: number): void {
+    appearance.gridSpacing = v;
+    void saveAppearance();
+  }
+
   function handleSetTileSize(size: number): void {
     appearance.tileSize = size;
     void saveAppearance();
@@ -941,7 +948,7 @@
 <main
   class="shell"
   class:anim-hidden={windowHidden}
-  style="--tile-size: {appearance.tileSize}px; background: {backgroundCss(getCurrentBackground())};"
+  style="--tile-size: {appearance.tileSize}px; --gap: {appearance.gridSpacing}px; background: {backgroundCss(getCurrentBackground())};"
 >
   <header class="topbar">
     <SearchBar />
@@ -1131,6 +1138,19 @@
             {/each}
           </div>
         </div>
+
+        <div class="set-section">
+          <div class="set-label">网格间距 <span class="set-val">{appearance.gridSpacing}px</span></div>
+          <input
+            class="spacing-range"
+            type="range"
+            min="0"
+            max="12"
+            step="1"
+            value={appearance.gridSpacing}
+            oninput={(e) => handleSetGridSpacing(Number((e.currentTarget as HTMLInputElement).value))}
+          />
+        </div>
       </div>
     </div>
   {/if}
@@ -1189,12 +1209,20 @@
   {/if}
 
   {#if settingsPlugin && settingsPlugin.settings?.length}
-    <PluginSettingsMenu
-      plugin={settingsPlugin}
-      cellId={settingsTarget ?? undefined}
-      onclose={() => (settingsTarget = null)}
-      onurlchange={(cellId, url) => void refreshWebTitle(cellId, url)}
-    />
+    {#if settingsPlugin.domain}
+      <HaSettingsMenu
+        plugin={settingsPlugin}
+        cellId={settingsTarget ?? undefined}
+        onclose={() => (settingsTarget = null)}
+      />
+    {:else}
+      <PluginSettingsMenu
+        plugin={settingsPlugin}
+        cellId={settingsTarget ?? undefined}
+        onclose={() => (settingsTarget = null)}
+        onurlchange={(cellId, url) => void refreshWebTitle(cellId, url)}
+      />
+    {/if}
   {/if}
 
   {#if folderEditTarget}
@@ -1851,6 +1879,16 @@
   .size-presets {
     display: flex;
     gap: 8px;
+  }
+.set-val {
+    font-size: 11px;
+    color: var(--fg-dim);
+    font-weight: 400;
+  }
+  .spacing-range {
+    width: 100%;
+    accent-color: var(--accent);
+    margin-top: 2px;
   }
   .size-btn {
     flex: 1;

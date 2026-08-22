@@ -222,6 +222,8 @@ export function setCellPosition(
 
   // 目标槽与其他单元重叠 → 交换位置（不自动重排）
   const other = targetArr.find((c) => c.id !== cellId && rectsOverlap(movingRect, cellRect(c)));
+  // eslint-disable-next-line no-console
+  console.info(`[drop] ${cellId.slice(0,8)} req=(${sx},${sy}) overlap=${other ? other.id.slice(0,8) : "无"} page=${page} cols=${activePageCols}`);
   if (other) {
     const otherX = other.x ?? 0;
     const otherY = other.y ?? 0;
@@ -482,8 +484,8 @@ export function setCellSize(
   size: { w: number; h: number },
   page = currentPage.index,
 ): boolean {
-  // 0.5 格步进（自定义尺寸粒度减半），上限 8
-  const snap = (n: number) => Math.max(1, Math.min(8, Math.round(n * 2) / 2));
+  // 整格步进（Rust 端 Layout 只接受整数尺寸），上限 8
+  const snap = (n: number) => Math.max(1, Math.min(8, Math.round(n)));
   const w = snap(size.w);
   const h = snap(size.h);
 
@@ -506,6 +508,29 @@ export function setCellSize(
     }
   }
   return false;
+}
+
+/** 保存前修复：小数尺寸/坐标取整（Rust Layout 只接受整数；0.5 吸附的旧数据会导致保存失败） */
+export function repairLayoutForPersist(): void {
+  for (const page of layout.pages) {
+    for (const c of page) {
+      if (c.kind === "icon") {
+        c.size.w = Math.round(c.size.w);
+        c.size.h = Math.round(c.size.h);
+        if (c.x !== undefined) c.x = Math.round(c.x);
+        if (c.y !== undefined) c.y = Math.round(c.y);
+      } else if (c.kind === "folder") {
+        for (const it of c.items) {
+          it.size.w = Math.round(it.size.w);
+          it.size.h = Math.round(it.size.h);
+          if (it.x !== undefined) it.x = Math.round(it.x);
+          if (it.y !== undefined) it.y = Math.round(it.y);
+        }
+        if (c.x !== undefined) c.x = Math.round(c.x);
+        if (c.y !== undefined) c.y = Math.round(c.y);
+      }
+    }
+  }
 }
 
 // ---------- 页面操作 ----------
