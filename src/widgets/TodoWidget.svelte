@@ -697,19 +697,32 @@
     position: relative;
     font-size: 10px;
   }
-  /* 层级引导线：按深度对齐（--depth 由模板传入），子子任务颜色更淡更细 */
+  /* 层级引导线：垂直引导线对齐父级的箭头列（(depth-1)*18+7px），加水平短线连接本行 */
   .item.child::before {
     content: "";
     position: absolute;
-    left: calc(var(--depth) * 18px);
-    top: -6px;
+    left: calc((var(--depth) - 1) * 18px + 7px);
+    top: -8px;
     bottom: 0;
     width: 2px;
     border-radius: 2px;
     background: var(--border);
     opacity: 0.65;
   }
-  .item.grandchild::before {
+  .item.child::after {
+    content: "";
+    position: absolute;
+    left: calc((var(--depth) - 1) * 18px + 7px);
+    top: 50%;
+    width: calc(var(--depth) * 18px - 2px);
+    height: 2px;
+    border-radius: 2px;
+    background: var(--border);
+    opacity: 0.65;
+    transform: translateY(-50%);
+  }
+  .item.grandchild::before,
+  .item.grandchild::after {
     width: 1.5px;
     opacity: 0.4;
   }

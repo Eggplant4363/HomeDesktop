@@ -15,6 +15,9 @@
   const pad = (n: number) => String(n).padStart(2, "0");
   const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
   const TIME_PRESETS = ["09:00", "12:00", "14:00", "18:00", "20:00", "22:00"];
+  const HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
+  const MINUTES = Array.from({ length: 12 }, (_, i) => pad(i * 5));
+
   function selHour(): string {
     return (selTime || "00").split(":")[0];
   }
@@ -25,11 +28,7 @@
     selTime = `${h}:${m}`;
     emit();
   }
-  /** 步进：当前值 + delta，按 mod 环绕（分钟按 5 分钟步进） */
-  function step(cur: string, delta: number, mod: number): string {
-    const v = (parseInt(cur, 10) || 0) + delta;
-    return pad(((v % mod) + mod) % mod);
-  }
+
 
   function todayStr(): string {
     const d = new Date();
@@ -159,14 +158,23 @@
         🕐 {customOpen ? "收起自定义" : "自定义时间"}
       </button>
       {#if customOpen}
-        <div class="t-stepper">
-          <button class="step" title="小时减1" onclick={() => setTimeParts(step(selHour(), -1, 24), selMinute())}>−</button>
-          <span class="val">{selHour()}</span>
-          <button class="step" title="小时加1" onclick={() => setTimeParts(step(selHour(), 1, 24), selMinute())}>＋</button>
-          <span class="colon">:</span>
-          <button class="step" title="分钟减5" onclick={() => setTimeParts(selHour(), step(selMinute(), -5, 60))}>−</button>
-          <span class="val">{selMinute()}</span>
-          <button class="step" title="分钟加5" onclick={() => setTimeParts(selHour(), step(selMinute(), 5, 60))}>＋</button>
+        <div class="t-drop">
+          <div class="t-col">
+            <div class="t-col-title">时</div>
+            <div class="t-scroll">
+              {#each HOURS as h (h)}
+                <button class="t-item" class:on={selHour() === h} onclick={() => setTimeParts(h, selMinute())}>{h}</button>
+              {/each}
+            </div>
+          </div>
+          <div class="t-col">
+            <div class="t-col-title">分</div>
+            <div class="t-scroll">
+              {#each MINUTES as m (m)}
+                <button class="t-item" class:on={selMinute() === m} onclick={() => setTimeParts(selHour(), m)}>{m}</button>
+              {/each}
+            </div>
+          </div>
         </div>
       {/if}
     </div>
@@ -360,41 +368,52 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-  .t-stepper {
+  .t-drop {
     display: flex;
-    align-items: center;
-    gap: 4px;
+    gap: 6px;
     margin-left: auto;
   }
-  .step {
-    width: 22px;
-    height: 22px;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    background: var(--bg-input);
-    color: var(--fg);
-    font-size: 12px;
-    cursor: pointer;
+  .t-col {
+    width: 64px;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    transition: all 0.12s;
+    flex-direction: column;
+    gap: 3px;
   }
-  .step:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .val {
-    min-width: 26px;
+  .t-col-title {
+    font-size: 9px;
+    color: var(--fg-dim);
     text-align: center;
-    font-size: 13px;
-    font-weight: 700;
+  }
+  .t-scroll {
+    height: 148px;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-input);
+  }
+  .t-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .t-item {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--fg-dim);
+    font-size: 12px;
+    padding: 4px 0;
+    cursor: pointer;
     font-variant-numeric: tabular-nums;
+    transition: all 0.1s;
+  }
+  .t-item:hover {
+    background: var(--bg-hover);
     color: var(--fg);
   }
-  .colon {
-    color: var(--fg-dim);
+  .t-item.on {
+    background: var(--accent);
+    color: #fff;
     font-weight: 700;
   }
 </style>
