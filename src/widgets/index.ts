@@ -5,6 +5,7 @@ import CalendarWidget from "./CalendarWidget.svelte";
 import SysMonitorWidget from "./SysMonitorWidget.svelte";
 import TodoWidget from "./TodoWidget.svelte";
 import MusicWidget from "./MusicWidget.svelte";
+import HaWidget from "./HaWidget.svelte";
 import type { Component } from "svelte";
 
 export interface WidgetDef {
@@ -19,6 +20,7 @@ export const widgetRegistry: Record<string, WidgetDef> = {
   sysmonitor: { component: SysMonitorWidget, defaultSize: { w: 2, h: 1 } },
   todo: { component: TodoWidget, defaultSize: { w: 2, h: 2 } },
   music: { component: MusicWidget, defaultSize: { w: 3, h: 1 } },
+  homeassistant: { component: HaWidget, defaultSize: { w: 3, h: 2 } },
 };
 
 export function getWidgetDef(component: string | undefined): WidgetDef | undefined {

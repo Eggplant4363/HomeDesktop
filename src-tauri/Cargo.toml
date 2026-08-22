@@ -25,7 +25,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 zip = "2"
 base64 = "0.22"
-ureq = { version = "2", features = ["socks-proxy"] }
+ureq = { version = "2", features = ["socks-proxy", "json"] }
 rustls = { version = "0.23", features = ["ring", "custom-provider"] }
 homedesktop-core = { path = "../crates/homedesktop-core" }
 

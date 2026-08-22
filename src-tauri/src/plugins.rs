@@ -337,7 +337,7 @@ fn web_icon_cache_path(app: &AppHandle, url: &str) -> Option<std::path::PathBuf>
 const FETCH_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
 
 /// 标题/图标抓取 agent：跳过证书校验（自签证书站点如 OpenWrt 路由器可访问）
-fn fetch_agent() -> ureq::Agent {
+pub(crate) fn fetch_agent() -> ureq::Agent {
     // 显式指定 ring provider（避免与 aws-lc-rs 同时启用导致进程级 provider 二义性 panic）
     let provider = rustls::crypto::ring::default_provider();
     let config = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(provider))

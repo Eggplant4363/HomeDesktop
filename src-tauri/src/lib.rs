@@ -1,4 +1,5 @@
 mod apps;
+mod ha;
 mod ime;
 #[cfg(windows)]
 mod media;
@@ -143,6 +144,8 @@ pub fn run() {
             media::media_control,
             ime::ime_save,
             ime::ime_restore,
+            ha::ha_states,
+            ha::ha_call,
             stats::sys_stats,
             backup::backup_export,
             backup::backup_import,
