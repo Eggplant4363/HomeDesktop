@@ -1,5 +1,5 @@
 <script lang="ts">
-  // 可视化日期 + 时间选择器（月历网格 + 快捷选项 + 时间）
+  // 可视化日期 + 时间选择器（月历网格 + 快捷选项 + 预设时间胶囊 + 自定义时间）
   let {
     value = "",
     time = "",
@@ -14,6 +14,7 @@
 
   const pad = (n: number) => String(n).padStart(2, "0");
   const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  const TIME_PRESETS = ["09:00", "12:00", "14:00", "18:00", "20:00", "22:00"];
 
   function todayStr(): string {
     const d = new Date();
@@ -29,10 +30,11 @@
   const [iy, im] = initial.split("-").map(Number);
   let viewYear = $state(iy);
   let viewMonth = $state(im - 1);
-  // svelte-ignore state_referenced_locally: 同上，仅取初始值
+  // svelte-ignore state_referenced_locally
   let selDate = $state(initial);
   // svelte-ignore state_referenced_locally
   let selTime = $state(time || nowTime());
+  let customOpen = $state(false);
 
   function emit(): void {
     onchange?.(selDate, selTime);
@@ -85,9 +87,9 @@
 
 <div class="cal">
   <div class="head">
-    <button class="nav" onclick={() => setView(viewYear, viewMonth - 1)}>‹</button>
+    <button class="nav" title="上个月" onclick={() => setView(viewYear, viewMonth - 1)}>‹</button>
     <span class="month">{viewYear}年{viewMonth + 1}月</span>
-    <button class="nav" onclick={() => setView(viewYear, viewMonth + 1)}>›</button>
+    <button class="nav" title="下个月" onclick={() => setView(viewYear, viewMonth + 1)}>›</button>
   </div>
   <div class="grid">
     {#each weekdays as w (w)}
@@ -107,25 +109,17 @@
     {/each}
   </div>
   <div class="quick">
-    <button class="q" onclick={() => quick(0)}>今天</button>
+    <button class="q" class:on={selDate === today} onclick={() => quick(0)}>今天</button>
     <button class="q" onclick={() => quick(1)}>明天</button>
     <button class="q" onclick={() => quick(7)}>下周</button>
     {#if selDate}
-      <button class="q" title="距今 {daysBetween(today, selDate)} 天" onclick={() => quick(null)}>清除</button>
+      <button class="q danger" title="距今 {daysBetween(today, selDate)} 天" onclick={() => quick(null)}>清除</button>
     {/if}
   </div>
   {#if selDate}
-    <div class="time-row">
+    <div class="divider"></div>
+    <div class="time-head">
       <span class="t-label">时间</span>
-      <input
-        class="t-input"
-        type="time"
-        value={selTime}
-        onchange={(e) => {
-          selTime = (e.target as HTMLInputElement).value || selTime;
-          emit();
-        }}
-      />
       {#if selDate === today}
         <span class="t-tip">今天 {selTime}</span>
       {:else}
@@ -133,78 +127,107 @@
       {/if}
     </div>
     <div class="t-presets">
-      {#each ["09:00", "12:00", "14:00", "18:00", "20:00", "22:00"] as p (p)}
+      {#each TIME_PRESETS as p (p)}
         <button
           class="tp"
-          class:on={selTime === p}
+          class:on={selTime === p && !customOpen}
           onclick={() => {
+            customOpen = false;
             selTime = p;
             emit();
           }}
         >{p}</button>
       {/each}
     </div>
+    <div class="t-custom">
+      <button class="custom-toggle" class:on={customOpen} onclick={() => (customOpen = !customOpen)}>
+        🕐 {customOpen ? "收起自定义" : "自定义时间"}
+      </button>
+      {#if customOpen}
+        <input
+          class="t-input"
+          type="time"
+          value={selTime}
+          onchange={(e) => {
+            selTime = (e.target as HTMLInputElement).value || selTime;
+            emit();
+          }}
+        />
+      {/if}
+    </div>
   {/if}
 </div>
 
 <style>
   .cal {
-    width: 232px;
+    width: 268px;
     background: var(--bg-elev);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.4);
     font-size: 12px;
+    color: var(--fg);
   }
   .head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 6px;
+    margin-bottom: 10px;
   }
   .nav {
+    width: 28px;
+    height: 28px;
     border: none;
-    background: transparent;
+    background: var(--bg-hover);
     color: var(--fg);
     font-size: 15px;
+    border-radius: 9px;
     cursor: pointer;
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
   }
   .nav:hover {
-    background: var(--bg-hover);
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    color: var(--accent);
   }
   .month {
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.5px;
   }
   .grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 2px;
-    margin-bottom: 8px;
+    gap: 3px;
+    margin-bottom: 10px;
   }
   .wd {
     text-align: center;
     font-size: 10px;
     color: var(--fg-dim);
     padding: 2px 0;
+    opacity: 0.8;
   }
   .day,
   .blank {
-    height: 26px;
-    border-radius: 7px;
+    height: 30px;
+    border-radius: 9px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 11px;
+    font-size: 12px;
   }
   .day {
     border: none;
     background: transparent;
     color: var(--fg);
     cursor: pointer;
+    transition:
+      background 0.12s,
+      color 0.12s;
   }
   .day:hover {
     background: var(--bg-hover);
@@ -212,82 +235,127 @@
   .day.today {
     color: var(--accent);
     font-weight: 700;
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent);
   }
   .day.sel {
     background: var(--accent);
     color: #fff;
     font-weight: 700;
+    box-shadow: none;
+  }
+  .day.sel:hover {
+    background: var(--accent);
   }
   .quick {
     display: flex;
-    gap: 4px;
-    margin-bottom: 8px;
+    gap: 5px;
   }
   .q {
     flex: 1;
     border: 1px solid var(--border);
     background: transparent;
     color: var(--fg-dim);
-    font-size: 10px;
-    border-radius: 6px;
-    padding: 3px 0;
+    font-size: 11px;
+    border-radius: 8px;
+    padding: 5px 0;
     cursor: pointer;
+    transition: all 0.15s;
   }
   .q:hover {
     border-color: var(--accent);
     color: var(--accent);
   }
-  .time-row {
+  .q.on {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .q.danger:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 12px 0 10px;
+  }
+  .time-head {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 8px;
   }
   .t-label {
-    font-size: 10px;
-    color: var(--fg-dim);
-  }
-  .t-input {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg-input);
-    color: var(--fg);
     font-size: 11px;
-    padding: 2px 5px;
-    outline: none;
-    width: 76px;
+    color: var(--fg-dim);
+    font-weight: 600;
   }
   .t-tip {
-    font-size: 10px;
-    color: var(--fg-dim);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 11px;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
   }
   .t-presets {
-    display: flex;
-    gap: 4px;
-    margin-top: 6px;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
   }
   .tp {
-    flex: 1;
-    min-width: 48px;
     border: 1px solid var(--border);
     background: transparent;
     color: var(--fg-dim);
-    font-size: 10px;
-    border-radius: 6px;
-    padding: 3px 0;
+    font-size: 11px;
+    border-radius: 8px;
+    padding: 6px 0;
     cursor: pointer;
+    font-variant-numeric: tabular-nums;
+    transition: all 0.15s;
   }
   .tp:hover {
     border-color: var(--accent);
     color: var(--accent);
   }
   .tp.on {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .t-custom {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .custom-toggle {
+    flex: 1;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--fg-dim);
+    font-size: 10px;
+    border-radius: 8px;
+    padding: 5px 0;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .custom-toggle:hover,
+  .custom-toggle.on {
     border-color: var(--accent);
     color: var(--accent);
-    font-weight: 600;
+  }
+  .t-input {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-input);
+    color: var(--fg);
+    font-size: 12px;
+    padding: 4px 8px;
+    outline: none;
+    width: 96px;
+  }
+  .t-input:focus {
+    border-color: var(--accent);
   }
 </style>
