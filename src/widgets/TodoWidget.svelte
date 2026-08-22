@@ -611,7 +611,7 @@
     transition: width 0.3s;
   }
   .count {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--fg-dim);
     font-variant-numeric: tabular-nums;
   }
@@ -624,7 +624,7 @@
     border: none;
     background: transparent;
     color: var(--fg-dim);
-    font-size: 10px;
+    font-size: 11px;
     padding: 1px 6px;
     border-radius: 6px;
     cursor: pointer;
@@ -656,7 +656,7 @@
     border-radius: 6px;
     background: var(--bg-input);
     color: var(--fg);
-    font-size: 11px;
+    font-size: 12px;
     padding: 3px 7px;
     outline: none;
     min-width: 0;
@@ -710,7 +710,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    font-size: 11px;
+    font-size: 12px;
     padding: 2px 4px;
     border-radius: 6px;
   }
@@ -719,7 +719,7 @@
   }
   .item.child {
     position: relative;
-    font-size: 10px;
+    font-size: 11px;
   }
   /* 层级仅靠缩进区分（用户要求去掉引导线） */
   .item.child .text {
@@ -730,7 +730,7 @@
     opacity: 0.85;
   }
   .item.grandchild {
-    font-size: 9.5px;
+    font-size: 10.5px;
   }
   .item.child.done .text,
   .item.grandchild.done .text {
@@ -825,7 +825,7 @@
     border: none;
     background: transparent;
     color: var(--fg-dim);
-    font-size: 10px;
+    font-size: 11px;
     cursor: pointer;
     padding: 0 2px;
     flex-shrink: 0;
@@ -895,7 +895,7 @@
     padding: 2px 8px;
   }
   .empty {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--fg-dim);
     text-align: center;
     padding: 8px 0;
@@ -945,7 +945,7 @@
     border-radius: 8px;
     background: var(--bg-input);
     color: var(--fg);
-    font-size: 13px;
+    font-size: 14px;
     padding: 7px 9px;
     outline: none;
   }
@@ -958,7 +958,7 @@
     gap: 5px;
   }
   .d-label {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--fg-dim);
   }
   .prio-btns {
@@ -970,7 +970,7 @@
     border: 1px solid var(--border);
     background: transparent;
     border-radius: 7px;
-    font-size: 11px;
+    font-size: 12px;
     padding: 4px 0;
     cursor: pointer;
   }
@@ -993,7 +993,7 @@
     border: 1px solid var(--border);
     background: transparent;
     border-radius: 7px;
-    font-size: 10px;
+    font-size: 11px;
     padding: 4px 0;
     cursor: pointer;
     color: var(--fg-dim);
