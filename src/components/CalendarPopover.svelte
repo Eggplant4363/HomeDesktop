@@ -132,6 +132,18 @@
         <span class="t-tip">{selDate} {selTime}</span>
       {/if}
     </div>
+    <div class="t-presets">
+      {#each ["09:00", "12:00", "14:00", "18:00", "20:00", "22:00"] as p (p)}
+        <button
+          class="tp"
+          class:on={selTime === p}
+          onclick={() => {
+            selTime = p;
+            emit();
+          }}
+        >{p}</button>
+      {/each}
+    </div>
   {/if}
 </div>
 
@@ -250,5 +262,32 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .t-presets {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }
+  .tp {
+    flex: 1;
+    min-width: 48px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--fg-dim);
+    font-size: 10px;
+    border-radius: 6px;
+    padding: 3px 0;
+    cursor: pointer;
+  }
+  .tp:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .tp.on {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
   }
 </style>

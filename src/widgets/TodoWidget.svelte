@@ -25,6 +25,8 @@
     dueTime?: string | null;
     /** 已发送过到期提醒（只提醒一次） */
     notified?: boolean;
+    /** 提醒提前量（分钟）：null=不提醒，0=准时，5/15/30/60/1440=提前N分钟 */
+    remind?: number | null;
     /** 子任务（多级） */
     children?: TodoItem[];
     /** 展开子任务（UI 状态，持久化） */
@@ -50,6 +52,15 @@
   let addingChildId = $state<string | null>(null);
   let childInput = $state("");
 
+  const REMINDS: { value: number | null; label: string }[] = [
+    { value: null, label: "不提醒" },
+    { value: 0, label: "准时" },
+    { value: 5, label: "提前5分" },
+    { value: 15, label: "提前15分" },
+    { value: 30, label: "提前30分" },
+    { value: 60, label: "提前1小时" },
+    { value: 1440, label: "提前1天" },
+  ];
   const PRIORITY_LABEL: Record<string, string> = { high: "高", medium: "中", low: "低" };
   const PRIORITY_COLOR: Record<string, string> = {
     high: "var(--danger)",
@@ -192,6 +203,7 @@
         priority: draftPriority,
         due: draftDue || null,
         dueTime: draftDue ? draftTime || null : null,
+        remind: 0,
         createdAt: Date.now(),
       },
     ];
@@ -299,6 +311,11 @@
     }));
     await save();
   }
+  async function setDetailRemind(v: number | null): Promise<void> {
+    if (!detailId) return;
+    items = updateRec(items, detailId, (x) => ({ ...x, remind: v, notified: false }));
+    await save();
+  }
 
   // ---------- 到时提醒（每 30s 检查，到时发一次系统通知） ----------
   async function checkDue(): Promise<void> {
@@ -306,14 +323,17 @@
     let changed = false;
     const walk = async (list: TodoItem[]): Promise<void> => {
       for (const item of list) {
-        if (!item.done && item.due && !item.notified) {
-          const at = new Date(`${item.due}T${item.dueTime ?? "23:59"}:00`).getTime();
+        const lead = item.remind === null ? -1 : (item.remind ?? 0); // -1 = 不提醒
+        if (!item.done && item.due && lead >= 0 && !item.notified) {
+          const at =
+            new Date(`${item.due}T${item.dueTime ?? "23:59"}:00`).getTime() - lead * 60000;
           if (!Number.isNaN(at) && now >= at) {
+            const body =
+              lead > 0
+                ? `「${item.text}」将在 ${lead >= 60 ? `${lead / 60} 小时` : `${lead} 分钟`}后到期`
+                : `「${item.text}」${item.dueTime ? "已到设定时间" : "已到期"}`;
             try {
-              await invoke("app_notify", {
-                title: "待办提醒",
-                body: `「${item.text}」${item.dueTime ? "已到设定时间" : "已到期"}`,
-              });
+              await invoke("app_notify", { title: "待办提醒", body });
             } catch {
               /* 通知失败忽略 */
             }
@@ -505,6 +525,18 @@
               style={p ? `color:${PRIORITY_COLOR[p]}` : ""}
               onclick={() => void setDetailPriority(p)}
             >{p ? PRIORITY_LABEL[p] : "无"}</button>
+          {/each}
+        </div>
+      </div>
+      <div class="d-row">
+        <span class="d-label">提醒（相对截止时间的提前量）</span>
+        <div class="remind-btns">
+          {#each REMINDS as r, i (i)}
+            <button
+              class="rbtn"
+              class:on={(detailItem.remind ?? 0) === r.value}
+              onclick={() => void setDetailRemind(r.value)}
+            >{r.label}</button>
           {/each}
         </div>
       </div>
@@ -883,6 +915,28 @@
   .d-cal {
     display: flex;
     justify-content: center;
+  }
+  .remind-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .rbtn {
+    flex: 1;
+    min-width: 58px;
+    border: 1px solid var(--border);
+    background: transparent;
+    border-radius: 7px;
+    font-size: 10px;
+    padding: 4px 0;
+    cursor: pointer;
+    color: var(--fg-dim);
+  }
+  .rbtn.on {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent);
+    font-weight: 600;
   }
   .d-foot {
     display: flex;
