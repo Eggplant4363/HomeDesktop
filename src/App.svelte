@@ -138,26 +138,26 @@
   /** 开机自启状态 */
   let autoStart = $state(false);
 
-  /** 未声明 sizes 的插件回退到的默认尺寸档 */
-  const defaultSizeOptions: { w: number; h: number }[] = [
+  /** 通用尺寸预设（取消插件 sizes 限制，任何图标/小组件都可自定义尺寸） */
+  const sizeOptions: { w: number; h: number }[] = [
     { w: 1, h: 1 },
-    { w: 2, h: 1 },
     { w: 1, h: 2 },
+    { w: 2, h: 1 },
     { w: 2, h: 2 },
+    { w: 2, h: 3 },
+    { w: 3, h: 1 },
     { w: 3, h: 2 },
+    { w: 3, h: 3 },
     { w: 4, h: 2 },
     { w: 4, h: 3 },
+    { w: 4, h: 4 },
+    { w: 5, h: 2 },
+    { w: 6, h: 2 },
+    { w: 6, h: 3 },
   ];
-
-  /** 尺寸选择器选项：优先插件声明的 sizes（小米/安卓设计） */
-  const sizeOptions = $derived.by(() => {
-    if (!sizeTarget) return defaultSizeOptions;
-    const cell = layout.pages[currentPage.index]?.find((c) => c.id === sizeTarget);
-    const plugin = cell?.kind === "icon" && plugins.find((p) => p.id === cell.pluginId);
-    if (!plugin) return [{ w: 1, h: 1 }]; // 非插件图标（应用抽屉）固定 1×1
-    const sizes = plugin.sizes;
-    return sizes && sizes.length > 0 ? sizes : defaultSizeOptions;
-  });
+  /** 自定义尺寸输入（网格单位） */
+  let customSizeW = $state(2);
+  let customSizeH = $state(2);
 
   /** 设置菜单目标插件 */
   const settingsPlugin = $derived.by(() => {
@@ -1160,13 +1160,20 @@
       onkeydown={(e) => e.key === "Escape" && (sizeTarget = null)}
     >
       <div class="move-menu">
-        <div class="move-head">设置尺寸（插件支持的尺寸档）</div>
+        <div class="move-head">设置尺寸（可自定义）</div>
         <div class="size-grid">
           {#each sizeOptions as opt (opt.w + "x" + opt.h)}
             <button class="size-opt" onclick={() => handleApplySize(opt)}>
               {opt.w}×{opt.h}
             </button>
           {/each}
+        </div>
+        <div class="custom-size">
+          <span class="cs-label">自定义</span>
+          <input type="number" min="1" max="8" bind:value={customSizeW} />
+          <span>×</span>
+          <input type="number" min="1" max="8" bind:value={customSizeH} />
+          <button class="cs-apply" onclick={() => handleApplySize({ w: customSizeW, h: customSizeH })}>应用</button>
         </div>
       </div>
     </div>
@@ -1585,6 +1592,42 @@
   }
   .move-row:hover {
     background: var(--bg-hover);
+  }
+  .custom-size {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+  .cs-label {
+    font-size: 12px;
+    color: var(--fg-dim);
+  }
+  .custom-size input {
+    width: 46px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-input);
+    color: var(--fg);
+    font-size: 13px;
+    padding: 4px 6px;
+    outline: none;
+    text-align: center;
+  }
+  .custom-size input:focus {
+    border-color: var(--accent);
+  }
+  .cs-apply {
+    margin-left: auto;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 12px;
+    padding: 5px 14px;
+    cursor: pointer;
   }
   .move-empty {
     padding: 18px;
