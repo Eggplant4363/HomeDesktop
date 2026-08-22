@@ -146,6 +146,7 @@ pub fn run() {
             ime::ime_restore,
             ha::ha_states,
             ha::ha_call,
+            ha::ha_entities,
             stats::sys_stats,
             backup::backup_export,
             backup::backup_import,

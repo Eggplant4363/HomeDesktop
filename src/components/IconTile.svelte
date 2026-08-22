@@ -2,6 +2,8 @@
   import AppIcon from "./AppIcon.svelte";
   import FaviconIcon from "./FaviconIcon.svelte";
   import type { IconCell, PluginInfo } from "../core/types";
+  import { appearance } from "../core/appearance.svelte";
+  import { iconGlyphSize } from "../core/iconStandard";
 
   let {
     item,
@@ -79,6 +81,20 @@
     }
     onresizeend?.(item.id);
   }
+
+  /** 图标尺寸随网格等比缩放（占格子约 50%，给标签留空间） */
+  // 图标留出文字空间：icon+文字 完整居中放进格子，上下位置一致
+  const iconSize = $derived(iconGlyphSize(appearance.tileSize));
+  const iconRadius = $derived(Math.round(iconSize * 0.27));
+  /** emoji/彩色图标的行内样式 */
+  const iconStyle = $derived.by(() => {
+    const fs = Math.round(iconSize * 0.55);
+    const parts = [`font-size:${fs}px`];
+    if (item.color) {
+      parts.push(`background:${item.color}`, `width:${iconSize}px`, `height:${iconSize}px`, `border-radius:14px`);
+    }
+    return parts.join(";");
+  });
 
   /** 应用抽屉图标：无插件但有自带动作 → 显示系统真实图标（AppIcon 内回退头像） */
   const isAppIcon = $derived(!plugin && !!item.action);
@@ -164,13 +180,13 @@
   {/if}
   {#if item.iconPath}
     <!-- 借用系统应用图标（M9） -->
-    <AppIcon path={item.iconPath} name={item.title} size={52} radius={14} />
+    <AppIcon path={item.iconPath} name={item.title} size={iconSize} radius={iconRadius} />
   {:else if isAppIcon}
     <AppIcon
       path={item.action?.kind === "app" ? item.action.path : ""}
       name={item.title}
-      size={52}
-      radius={14}
+      size={iconSize}
+      radius={iconRadius}
     />
   {:else if isWebIcon}
     <!-- 网页快捷方式：显示网站 favicon（兜底链见 FaviconIcon） -->
@@ -184,7 +200,7 @@
     <div
       class="icon"
       class:colored={!!item.color}
-      style={item.color ? `background: ${item.color};` : ""}
+      style={iconStyle}
     >{displayEmoji}</div>
   {/if}
   <div class="label">{item.title}</div>
@@ -194,12 +210,14 @@
   .tile {
     position: relative;
     height: 100%;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 12px;
     background: var(--bg-elev);
+    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
     border-radius: var(--radius);
     cursor: pointer;
     transition: transform 0.12s, background 0.15s;
@@ -224,12 +242,9 @@
     }
   }
   .icon {
-    font-size: 34px;
     line-height: 1;
   }
   .icon.colored {
-    width: 52px;
-    height: 52px;
     border-radius: 14px;
     display: flex;
     align-items: center;
@@ -237,9 +252,11 @@
     color: #fff;
   }
   .label {
-    font-size: 12px;
-    color: var(--fg-dim);
-    max-width: 90%;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+    text-align: center;
+    max-width: 92%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

@@ -83,24 +83,6 @@
   class="widget-tile"
   class:editing={editMode}
   data-cell-id={item.id}
-  role="button"
-  tabindex="0"
-  onclick={(e) => {
-    // 正常模式点击小组件 = 打开设置（如倒计时设置时间）；
-    // 点击落在组件内部交互元素（按钮/输入框等）时不触发
-    if (editMode) return;
-    if ((e.target as HTMLElement).closest("button, input, select, textarea, a")) return;
-    onsettings?.(item.id);
-  }}
-  onkeydown={(e) => {
-    if (editMode) return;
-    if (
-      e.key === "Enter" &&
-      !(e.target as HTMLElement).closest("button, input, select, textarea, a")
-    ) {
-      onsettings?.(item.id);
-    }
-  }}
 >
   {#if editMode && onresizeto}
     <div

@@ -116,6 +116,7 @@
   // 首次挂载与图标大小变化时重新度量
   $effect(() => {
     void appearance.tileSize;
+    void appearance.gridSpacing;
     measure();
   });
 

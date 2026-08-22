@@ -1,15 +1,9 @@
 {
   "id": "dev.homedesktop.homeassistant",
   "name": "HomeAssistant",
-  "version": "0.1.0",
-  "type": "widget",
+  "version": "0.2.0",
+  "type": "provider",
   "emoji": "🏠",
-  "widgetComponent": "homeassistant",
-  "sizes": [
-    { "w": 3, "h": 2 },
-    { "w": 4, "h": 2 },
-    { "w": 4, "h": 3 }
-  ],
   "settings": [
     {
       "key": "url",
@@ -22,13 +16,71 @@
       "label": "长期访问令牌",
       "type": "text",
       "default": ""
-    },
-    {
-      "key": "entities",
-      "label": "实体 ID（逗号分隔）",
-      "type": "text",
-      "default": "light.bedroom,switch.office,sensor.temperature"
     }
   ],
-  "actions": []
+  "plugins": [
+    {
+      "id": "dev.homedesktop.homeassistant.light",
+      "name": "灯",
+      "type": "widget",
+      "emoji": "💡",
+      "widgetComponent": "homeassistant",
+      "domain": "light",
+      "sizes": [
+        { "w": 2, "h": 2 },
+        { "w": 3, "h": 2 },
+        { "w": 4, "h": 3 }
+      ],
+      "settings": [
+        {
+          "key": "entities",
+          "label": "灯实体 ID（逗号分隔）",
+          "type": "text",
+          "default": "light.bedroom,light.living_room"
+        }
+      ]
+    },
+    {
+      "id": "dev.homedesktop.homeassistant.switch",
+      "name": "开关",
+      "type": "widget",
+      "emoji": "🔌",
+      "widgetComponent": "homeassistant",
+      "domain": "switch",
+      "sizes": [
+        { "w": 2, "h": 2 },
+        { "w": 3, "h": 2 },
+        { "w": 4, "h": 3 }
+      ],
+      "settings": [
+        {
+          "key": "entities",
+          "label": "开关实体 ID（逗号分隔）",
+          "type": "text",
+          "default": "switch.office,switch.router"
+        }
+      ]
+    },
+    {
+      "id": "dev.homedesktop.homeassistant.sensor",
+      "name": "传感器",
+      "type": "widget",
+      "emoji": "📊",
+      "widgetComponent": "homeassistant",
+      "domain": "sensor",
+      "sizes": [
+        { "w": 2, "h": 2 },
+        { "w": 3, "h": 2 },
+        { "w": 4, "h": 3 }
+      ],
+      "settings": [
+        {
+          "key": "entities",
+          "label": "传感器实体 ID（逗号分隔）",
+          "type": "text",
+          "default": "sensor.temperature,sensor.humidity"
+        }
+      ]
+    }
+  ]
 }

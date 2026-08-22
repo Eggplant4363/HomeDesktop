@@ -149,6 +149,7 @@
     const style = getComputedStyle(gridEl);
     const t = parseFloat(style.getPropertyValue("--tile-size"));
     const g = parseFloat(style.getPropertyValue("--gap"));
+
     if (Number.isFinite(t) && t > 0) tile = t;
     if (Number.isFinite(g) && g >= 0) gap = g;
     // 按窗口宽度计算能放下的最小列数（画布恰好铺满，图标不被裁）
@@ -162,9 +163,10 @@
     setActivePageRows(mr);
   }
 
-  // 首次挂载、图标大小变化、窗口尺寸变化时重新度量（tile/gap/列数用于画布与吸附计算）
+  // 首次挂载、图标大小/网格间距变化、窗口尺寸变化时重新度量（tile/gap/列数用于画布与吸附计算）
   $effect(() => {
     void appearance.tileSize;
+    void appearance.gridSpacing;
     measure();
     const onResize = () => measure();
     window.addEventListener("resize", onResize);
@@ -201,9 +203,13 @@
   function onPointerMove(e: PointerEvent): void {
     if (dragging) {
       e.preventDefault();
-      dragDx = e.clientX - dragStartPointerX;
-      dragDy = e.clientY - dragStartPointerY;
       updateTarget(e.clientX, e.clientY);
+      // 幽灵图标吸附到落点（所见即所得：图标显示位置 = 松手后的位置）
+      if (dragSlot && draggingId) {
+        const dc = cellById(draggingId);
+        dragDx = (dragSlot.x - (dc?.x ?? 0)) * SLOT;
+        dragDy = (dragSlot.y - (dc?.y ?? 0)) * SLOT;
+      }
       edgeFlip(e.clientX);
       return;
     }
@@ -353,16 +359,18 @@
     clearEdgeTimer();
   }
 
-  /** 计算落点（吸附网格）与文件夹拖入目标 */
+  /** 计算落点（吸附网格）与文件夹拖入目标。
+   *  增量式：落点 = 原始格位 + 拖动距离的格数，抓取位置不影响，移一格即动一格 */
   function updateTarget(x: number, y: number): void {
     if (!canvasEl || !draggingId) return;
     const cell = cellById(draggingId);
     const w = cell?.kind === "folder" ? 1 : cell?.size.w ?? 1;
     const h = cell?.kind === "folder" ? 1 : cell?.size.h ?? 1;
-    const rect = canvasEl.getBoundingClientRect();
     const slot = SLOT;
-    const tx = Math.round((x - rect.left - PAD - (w * slot) / 2) / slot);
-    const ty = Math.round((y - rect.top - PAD - (h * slot) / 2) / slot);
+    const dx = x - dragStartPointerX;
+    const dy = y - dragStartPointerY;
+    const tx = (cell?.x ?? 0) + Math.round(dx / slot);
+    const ty = (cell?.y ?? 0) + Math.round(dy / slot);
     dragSlot = {
       x: Math.max(0, Math.min(cols - w, tx)),
       y: Math.max(0, ty),

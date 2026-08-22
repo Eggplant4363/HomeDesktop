@@ -14,6 +14,8 @@ export const appearance = $state<{
   /** 深浅色各自独立的背景 */
   backgrounds: Record<Theme, Background>;
   tileSize: number;
+  /** 网格间距（图标之间留白，px，不影响移动单位=格子大小） */
+  gridSpacing: number;
   theme: Theme;
   /** 特效开关（设置 → 特效）：添加图标弹出动画、窗口显示/隐藏过渡等 */
   effects: { iconAdd: boolean; windowAnim: boolean };
@@ -23,6 +25,7 @@ export const appearance = $state<{
     light: { kind: "color", value: "#eef1f6" },
   },
   tileSize: 84,
+  gridSpacing: 4,
   theme: "dark",
   effects: { iconAdd: true, windowAnim: true },
 });
@@ -51,6 +54,7 @@ export async function loadAppearance(): Promise<void> {
       backgrounds?: Record<Theme, Background>;
       background?: Background; // 旧版单背景（迁移用）
       tileSize?: number;
+      gridSpacing?: number;
       theme?: Theme;
       effects?: { iconAdd?: boolean; windowAnim?: boolean };
     };
@@ -62,8 +66,11 @@ export async function loadAppearance(): Promise<void> {
       // 旧版迁移：单背景 → 深色；浅色用默认
       appearance.backgrounds.dark = r.background;
     }
-    if (typeof r.tileSize === "number" && r.tileSize >= 56 && r.tileSize <= 120) {
+    if (typeof r.tileSize === "number" && r.tileSize >= 40 && r.tileSize <= 120) {
       appearance.tileSize = r.tileSize;
+    }
+    if (typeof r.gridSpacing === "number" && r.gridSpacing >= 0 && r.gridSpacing <= 20) {
+      appearance.gridSpacing = r.gridSpacing;
     }
     if (r.theme === "dark" || r.theme === "light") {
       appearance.theme = r.theme;
@@ -85,6 +92,7 @@ export async function saveAppearance(): Promise<void> {
       light: appearance.backgrounds.light,
     },
     tileSize: appearance.tileSize,
+    gridSpacing: appearance.gridSpacing,
     theme: appearance.theme,
     effects: appearance.effects,
   });
@@ -117,6 +125,7 @@ export const backgroundPresets: { label: string; bg: Background }[] = [
 ];
 
 export const tileSizePresets: { label: string; value: number }[] = [
+  { label: "特小", value: 52 },
   { label: "小", value: 64 },
   { label: "中", value: 84 },
   { label: "大", value: 104 },

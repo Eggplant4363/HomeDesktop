@@ -31,7 +31,7 @@ export interface PluginInfo {
   id: string;
   name: string;
   version: string;
-  pluginType: "icon" | "widget";
+  pluginType: "icon" | "widget" | "provider";
   /** 用 emoji 作图标，避免 MVP 阶段处理图片资源 */
   emoji?: string;
   actions: ActionSpec[];
@@ -49,6 +49,12 @@ export interface PluginInfo {
   widgetFile?: string;
   /** 插件自带小组件（M16）：自定义元素标签名 */
   widgetElement?: string;
+  /** 提供商 id（二级菜单分组；provider 子插件带此字段） */
+  providerId?: string;
+  /** 提供商名称 */
+  providerName?: string;
+  /** 实体域（HomeAssistant 等子插件专用） */
+  domain?: string;
 }
 
 /** 插件市场目录项（本地 market/*.zip） */

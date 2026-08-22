@@ -63,6 +63,8 @@ struct Manifest {
     #[serde(rename = "type")]
     plugin_type: String,
     emoji: Option<String>,
+    /// 提供商容器无顶层 actions（子插件各自带），故允许缺省
+    #[serde(default)]
     actions: Vec<ActionSpec>,
     /// 提供商容器：子插件数组（type=provider 时有效）
     #[serde(default)]
