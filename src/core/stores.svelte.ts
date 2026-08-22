@@ -433,8 +433,10 @@ export function setCellSize(
   size: { w: number; h: number },
   page = currentPage.index,
 ): boolean {
-  const w = Math.max(1, Math.round(size.w));
-  const h = Math.max(1, Math.round(size.h));
+  // 0.5 格步进（自定义尺寸粒度减半），上限 8
+  const snap = (n: number) => Math.max(1, Math.min(8, Math.round(n * 2) / 2));
+  const w = snap(size.w);
+  const h = snap(size.h);
 
   const arr = layout.pages[page];
   const cell = arr?.find((c) => c.id === id);

@@ -23,6 +23,7 @@
     ondelete,
     ondropat,
     onresize,
+    onresizeto,
     onsettings,
   }: {
     onaddclick?: () => void;
@@ -34,6 +35,7 @@
     /** 自由摆放落点：文件夹内图标放到 (x, y) 网格坐标 */
     ondropat?: (folderId: string, iconId: string, x: number, y: number) => void;
     onresize?: (iconId: string) => void;
+    onresizeto?: (iconId: string, w: number, h: number) => void;
     onsettings?: (cellId: string) => void;
   } = $props();
 
@@ -288,6 +290,7 @@
               ondelete={() => ondelete?.(folder.id, icon.id)}
               onmove={() => onmove?.(icon.id)}
               onresize={() => onresize?.(icon.id)}
+            onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
               onsettings={() => onsettings?.(icon.id)}
             />
           {:else}
@@ -300,6 +303,7 @@
               onmove={() => onmove?.(icon.id)}
               onedit={() => onediticon?.(icon.id)}
               onresize={() => onresize?.(icon.id)}
+            onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
               onsettings={() => onsettings?.(icon.id)}
             />
           {/if}

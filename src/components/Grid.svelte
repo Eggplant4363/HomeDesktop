@@ -21,6 +21,7 @@
     onediticon,
     onmoveicon,
     onresize,
+    onresizeto,
     onsettings,
     ondropat,
     ondropinto,
@@ -44,6 +45,7 @@
     onediticon?: (iconId: string) => void;
     onmoveicon?: (iconId: string) => void;
     onresize?: (iconId: string) => void;
+    onresizeto?: (iconId: string, w: number, h: number) => void;
     onsettings?: (cellId: string) => void;
     highlightId?: string | null;
     /** 自由摆放落点：dragId 放到 (x, y) 网格坐标 */
@@ -458,7 +460,8 @@
             editMode={ui.editMode}
             ondelete={() => ondelete?.(cell.id)}
             onmove={() => onmoveicon?.(cell.id)}
-            onresize={() => onresize?.(cell.id)}
+                        onresize={() => onresize?.(cell.id)}
+            onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
             onsettings={() => onsettings?.(cell.id)}
           />
         </div>
@@ -478,7 +481,8 @@
             ondelete={() => ondelete?.(cell.id)}
             onmove={() => onmoveicon?.(cell.id)}
             onedit={() => onediticon?.(cell.id)}
-            onresize={() => onresize?.(cell.id)}
+                        onresize={() => onresize?.(cell.id)}
+            onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
             onsettings={() => onsettings?.(cell.id)}
           />
         </div>

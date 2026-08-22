@@ -743,6 +743,11 @@
     settingsTarget = null;
   }
 
+  /** 拖拽手柄实时调整尺寸（0.5 格步进），实时持久化 */
+  function handleResizeTo(iconId: string, w: number, h: number): void {
+    if (setCellSize(iconId, { w, h })) persist();
+  }
+
   function handleSettings(cellId: string): void {
     settingsTarget = settingsTarget === cellId ? null : cellId;
     sizeTarget = null;
@@ -1170,9 +1175,9 @@
         </div>
         <div class="custom-size">
           <span class="cs-label">自定义</span>
-          <input type="number" min="1" max="8" bind:value={customSizeW} />
+          <input type="number" min="1" max="8" step="0.5" bind:value={customSizeW} />
           <span>×</span>
-          <input type="number" min="1" max="8" bind:value={customSizeH} />
+          <input type="number" min="1" max="8" step="0.5" bind:value={customSizeH} />
           <button class="cs-apply" onclick={() => handleApplySize({ w: customSizeW, h: customSizeH })}>应用</button>
         </div>
       </div>
@@ -1382,6 +1387,7 @@
         ondelete={(fid, iid) => handleDeleteFolderItem(fid, iid)}
         ondropat={handleFolderDropAt}
         onresize={(id) => handleResize(id)}
+        onresizeto={(id, w, h) => handleResizeTo(id, w, h)}
         onsettings={(id) => handleSettings(id)}
       />
     {:else}
@@ -1402,6 +1408,7 @@
         onediticon={(id) => handleEditIcon(id)}
         onmoveicon={(id) => handleMove(id)}
         onresize={(id) => handleResize(id)}
+        onresizeto={(id, w, h) => handleResizeTo(id, w, h)}
         onsettings={(id) => handleSettings(id)}
         ondropat={handleDropAt}
         ondropinto={handleDropInto}
