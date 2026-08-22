@@ -192,7 +192,8 @@ fn icon_cache_path(app: &tauri::AppHandle, path: &str) -> Option<PathBuf> {
     let dir = app.path().app_data_dir().ok()?.join("icons");
     let mut h = DefaultHasher::new();
     path.hash(&mut h);
-    Some(dir.join(format!("{:016x}.png", h.finish())))
+    // -v2：高清提取后旧的低清缓存不再命中
+    Some(dir.join(format!("{:016x}-v2.png", h.finish())))
 }
 
 /// 获取应用图标的 data URL（PNG base64，可直接用于 <img src>）。
@@ -231,43 +232,82 @@ pub fn launch_path(path: String) -> Result<(), String> {
     })
 }
 
-/// Windows：SHGetFileInfo 取文件关联图标（HICON）→ GetDIBits 取 32bpp BGRA 像素
-/// （+ 1bpp 掩码补 alpha）→ homedesktop-core 编码 PNG。
+/// Windows 高清图标提取：
+/// 1) SHGetFileInfoW(SHGFI_SYSICONINDEX) 取系统图标索引
+/// 2) SHGetImageList(SHIL_JUMBO) 取 256×256 高清图标（HICON）
+/// 3) 兜底 SHGetFileInfoW 大图标（32×32）
+/// HICON → GetDIBits 32bpp 像素（+ 1bpp 掩码补 alpha）→ homedesktop-core 编码 PNG。
 #[cfg(target_os = "windows")]
 fn extract_icon_png(path: &str) -> Option<Vec<u8>> {
-    use homedesktop_core::encode_rgba_png;
     use windows::core::PCWSTR;
-    use windows::Win32::Graphics::Gdi::{
-        BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC,
-        DeleteObject, GetDIBits, HGDIOBJ, HDC, HBITMAP,
-    };
     use windows::Win32::Storage::FileSystem::FILE_FLAGS_AND_ATTRIBUTES;
-    use windows::Win32::UI::Shell::{SHGetFileInfoW, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON};
-    use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, HICON, ICONINFO};
+    use windows::Win32::UI::Controls::IImageList;
+    use windows::Win32::UI::Shell::{
+        SHGetFileInfoW, SHGetImageList, SHFILEINFOW, SHGFI_ICON, SHGFI_LARGEICON,
+        SHGFI_SYSICONINDEX, SHIL_JUMBO,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, HICON};
 
     unsafe {
-        // 1) 取文件关联的大图标（32×32）
         let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+
+        // 1) 系统图标索引（任意尺寸）
         let mut sfi = std::mem::zeroed::<SHFILEINFOW>();
         if SHGetFileInfoW(
             PCWSTR(wide.as_ptr()),
             FILE_FLAGS_AND_ATTRIBUTES(0),
             Some(&mut sfi as *mut SHFILEINFOW),
             std::mem::size_of::<SHFILEINFOW>() as u32,
-            SHGFI_ICON | SHGFI_LARGEICON,
-        ) == 0
+            SHGFI_SYSICONINDEX,
+        ) != 0
         {
-            return None;
-        }
-        let icon: HICON = sfi.hIcon;
-        if icon.0.is_null() {
-            return None;
+            // 2) 高清图像列表（SHIL_JUMBO = 256×256；部分应用只有小图标时会返回最大可用尺寸）
+            if let Ok(list) = SHGetImageList::<IImageList>(SHIL_JUMBO as i32) {
+                if let Ok(icon) = list.GetIcon(sfi.iIcon as i32, 0) {
+                    if !icon.0.is_null() {
+                        if let Some(png) = hicon_to_png(icon) {
+                            return Some(png);
+                        }
+                        let _ = DestroyIcon(icon);
+                    }
+                }
+            }
         }
 
-        // 2) 取颜色位图 + 掩码位图
+        // 3) 兜底：32×32 大图标
+        let mut sfi2 = std::mem::zeroed::<SHFILEINFOW>();
+        if SHGetFileInfoW(
+            PCWSTR(wide.as_ptr()),
+            FILE_FLAGS_AND_ATTRIBUTES(0),
+            Some(&mut sfi2 as *mut SHFILEINFOW),
+            std::mem::size_of::<SHFILEINFOW>() as u32,
+            SHGFI_ICON | SHGFI_LARGEICON,
+        ) != 0
+        {
+            let icon: HICON = sfi2.hIcon;
+            if !icon.0.is_null() {
+                let png = hicon_to_png(icon);
+                let _ = DestroyIcon(icon);
+                return png;
+            }
+        }
+    }
+    None
+}
+
+/// HICON → PNG（GetDIBits 取 32bpp BGRA 像素 + 1bpp 掩码补 alpha）
+#[cfg(target_os = "windows")]
+fn hicon_to_png(icon: windows::Win32::UI::WindowsAndMessaging::HICON) -> Option<Vec<u8>> {
+    use homedesktop_core::encode_rgba_png;
+    use windows::Win32::Graphics::Gdi::{
+        BITMAPINFO, BITMAPINFOHEADER, BI_RGB, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC,
+        DeleteObject, GetDIBits, HGDIOBJ, HDC, HBITMAP,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{GetIconInfo, ICONINFO};
+
+    unsafe {
         let mut ii = std::mem::zeroed::<ICONINFO>();
         if GetIconInfo(icon, &mut ii).is_err() {
-            let _ = DestroyIcon(icon);
             return None;
         }
         let hbm_color: HBITMAP = ii.hbmColor;
@@ -275,20 +315,17 @@ fn extract_icon_png(path: &str) -> Option<Vec<u8>> {
 
         let hdc: HDC = CreateCompatibleDC(None);
         if hdc.0.is_null() {
-            let _ = DestroyIcon(icon);
             return None;
         }
 
         let mut result: Option<Vec<u8>> = None;
 
-        // 3) 先查询位图尺寸（lpvBits = None）
         let mut bmi = std::mem::zeroed::<BITMAPINFO>();
         bmi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
         if GetDIBits(hdc, hbm_color, 0, 0, None, &mut bmi, DIB_RGB_COLORS) != 0 {
             let w = bmi.bmiHeader.biWidth.max(0) as u32;
             let h = bmi.bmiHeader.biHeight.abs() as u32;
             if w > 0 && h > 0 && w <= 512 && h <= 512 {
-                // 4) 取 32bpp 顶向下 BGRA 像素
                 let mut color_buf = vec![0u8; (w * h * 4) as usize];
                 bmi.bmiHeader.biHeight = -(h as i32);
                 bmi.bmiHeader.biPlanes = 1;
@@ -305,7 +342,6 @@ fn extract_icon_png(path: &str) -> Option<Vec<u8>> {
                     DIB_RGB_COLORS,
                 ) != 0
                 {
-                    // 5) 颜色位图自身带 alpha（Vista+ 图标）则直接用，否则用 1bpp 掩码补 alpha
                     let has_alpha = color_buf.chunks_exact(4).any(|p| p[3] != 0);
                     let mut mask_buf: Vec<u8> = Vec::new();
                     let mut mask_ok = false;
@@ -346,7 +382,6 @@ fn extract_icon_png(path: &str) -> Option<Vec<u8>> {
                             } else {
                                 255
                             };
-                            // BGRA → RGBA
                             rgba.extend_from_slice(&[
                                 color_buf[idx + 2],
                                 color_buf[idx + 1],
@@ -360,11 +395,9 @@ fn extract_icon_png(path: &str) -> Option<Vec<u8>> {
             }
         }
 
-        // 6) 清理句柄
         let _ = DeleteDC(hdc);
         let _ = DeleteObject(HGDIOBJ(hbm_color.0));
         let _ = DeleteObject(HGDIOBJ(hbm_mask.0));
-        let _ = DestroyIcon(icon);
         result
     }
 }
