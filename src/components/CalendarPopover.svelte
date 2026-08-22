@@ -15,9 +15,6 @@
   const pad = (n: number) => String(n).padStart(2, "0");
   const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
   const TIME_PRESETS = ["09:00", "12:00", "14:00", "18:00", "20:00", "22:00"];
-  const HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
-  const MINUTES = Array.from({ length: 12 }, (_, i) => pad(i * 5));
-
   function selHour(): string {
     return (selTime || "00").split(":")[0];
   }
@@ -27,6 +24,11 @@
   function setTimeParts(h: string, m: string): void {
     selTime = `${h}:${m}`;
     emit();
+  }
+  /** 步进：当前值 + delta，按 mod 环绕（分钟按 5 分钟步进） */
+  function step(cur: string, delta: number, mod: number): string {
+    const v = (parseInt(cur, 10) || 0) + delta;
+    return pad(((v % mod) + mod) % mod);
   }
 
   function todayStr(): string {
@@ -157,18 +159,14 @@
         🕐 {customOpen ? "收起自定义" : "自定义时间"}
       </button>
       {#if customOpen}
-        <div class="t-custom-pick">
-          <select class="t-select" value={selHour()} onchange={(e) => setTimeParts((e.target as HTMLSelectElement).value, selMinute())}>
-            {#each HOURS as h (h)}
-              <option value={h}>{h}</option>
-            {/each}
-          </select>
+        <div class="t-stepper">
+          <button class="step" title="小时减1" onclick={() => setTimeParts(step(selHour(), -1, 24), selMinute())}>−</button>
+          <span class="val">{selHour()}</span>
+          <button class="step" title="小时加1" onclick={() => setTimeParts(step(selHour(), 1, 24), selMinute())}>＋</button>
           <span class="colon">:</span>
-          <select class="t-select" value={selMinute()} onchange={(e) => setTimeParts(selHour(), (e.target as HTMLSelectElement).value)}>
-            {#each MINUTES as m (m)}
-              <option value={m}>{m}</option>
-            {/each}
-          </select>
+          <button class="step" title="分钟减5" onclick={() => setTimeParts(selHour(), step(selMinute(), -5, 60))}>−</button>
+          <span class="val">{selMinute()}</span>
+          <button class="step" title="分钟加5" onclick={() => setTimeParts(selHour(), step(selMinute(), 5, 60))}>＋</button>
         </div>
       {/if}
     </div>
@@ -362,25 +360,38 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-  .t-custom-pick {
+  .t-stepper {
     display: flex;
     align-items: center;
     gap: 4px;
     margin-left: auto;
   }
-  .t-select {
+  .step {
+    width: 22px;
+    height: 22px;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 7px;
     background: var(--bg-input);
     color: var(--fg);
-    font-size: 13px;
-    padding: 4px 6px;
-    outline: none;
-    font-variant-numeric: tabular-nums;
+    font-size: 12px;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.12s;
   }
-  .t-select:focus {
+  .step:hover {
     border-color: var(--accent);
+    color: var(--accent);
+  }
+  .val {
+    min-width: 26px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--fg);
   }
   .colon {
     color: var(--fg-dim);

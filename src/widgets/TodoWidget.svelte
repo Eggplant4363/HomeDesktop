@@ -411,9 +411,10 @@
       <div
         class="item"
         class:child={depth > 0}
+        class:grandchild={depth >= 2}
         class:done={t.done}
         class:overdue={isOverdue(t)}
-        style="padding-left:{6 + depth * 18}px;"
+        style="padding-left:{6 + depth * 18}px; --depth:{depth};"
       >
         {#if t.children && t.children.length > 0}
           <button
@@ -696,21 +697,34 @@
     position: relative;
     font-size: 10px;
   }
+  /* 层级引导线：按深度对齐（--depth 由模板传入），子子任务颜色更淡更细 */
   .item.child::before {
     content: "";
     position: absolute;
-    left: 10px;
-    top: -5px;
+    left: calc(var(--depth) * 18px);
+    top: -6px;
     bottom: 0;
     width: 2px;
     border-radius: 2px;
     background: var(--border);
-    opacity: 0.7;
+    opacity: 0.65;
+  }
+  .item.grandchild::before {
+    width: 1.5px;
+    opacity: 0.4;
   }
   .item.child .text {
     color: var(--fg-dim);
   }
-  .item.child.done .text {
+  .item.grandchild .text {
+    color: var(--fg-dim);
+    opacity: 0.85;
+  }
+  .item.grandchild {
+    font-size: 9.5px;
+  }
+  .item.child.done .text,
+  .item.grandchild.done .text {
     color: var(--fg-dim);
   }
   .item.done .text {
