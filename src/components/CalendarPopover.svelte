@@ -15,6 +15,19 @@
   const pad = (n: number) => String(n).padStart(2, "0");
   const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
   const TIME_PRESETS = ["09:00", "12:00", "14:00", "18:00", "20:00", "22:00"];
+  const HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
+  const MINUTES = Array.from({ length: 12 }, (_, i) => pad(i * 5));
+
+  function selHour(): string {
+    return (selTime || "00").split(":")[0];
+  }
+  function selMinute(): string {
+    return (selTime || "00").split(":")[1] ?? "00";
+  }
+  function setTimeParts(h: string, m: string): void {
+    selTime = `${h}:${m}`;
+    emit();
+  }
 
   function todayStr(): string {
     const d = new Date();
@@ -144,15 +157,19 @@
         🕐 {customOpen ? "收起自定义" : "自定义时间"}
       </button>
       {#if customOpen}
-        <input
-          class="t-input"
-          type="time"
-          value={selTime}
-          onchange={(e) => {
-            selTime = (e.target as HTMLInputElement).value || selTime;
-            emit();
-          }}
-        />
+        <div class="t-custom-pick">
+          <select class="t-select" value={selHour()} onchange={(e) => setTimeParts((e.target as HTMLSelectElement).value, selMinute())}>
+            {#each HOURS as h (h)}
+              <option value={h}>{h}</option>
+            {/each}
+          </select>
+          <span class="colon">:</span>
+          <select class="t-select" value={selMinute()} onchange={(e) => setTimeParts(selHour(), (e.target as HTMLSelectElement).value)}>
+            {#each MINUTES as m (m)}
+              <option value={m}>{m}</option>
+            {/each}
+          </select>
+        </div>
       {/if}
     </div>
   {/if}
@@ -345,18 +362,28 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-  .t-input {
-    color-scheme: inherit;
+  .t-custom-pick {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+  }
+  .t-select {
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--bg-input);
     color: var(--fg);
-    font-size: 12px;
-    padding: 4px 8px;
+    font-size: 13px;
+    padding: 4px 6px;
     outline: none;
-    width: 96px;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
   }
-  .t-input:focus {
+  .t-select:focus {
     border-color: var(--accent);
+  }
+  .colon {
+    color: var(--fg-dim);
+    font-weight: 700;
   }
 </style>

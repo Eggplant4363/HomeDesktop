@@ -410,9 +410,10 @@
     {#each visible as { item: t, depth } (t.id)}
       <div
         class="item"
+        class:child={depth > 0}
         class:done={t.done}
         class:overdue={isOverdue(t)}
-        style="padding-left:{6 + depth * 16}px;"
+        style="padding-left:{6 + depth * 18}px;"
       >
         {#if t.children && t.children.length > 0}
           <button
@@ -426,8 +427,8 @@
         {:else}
           <span class="exp-placeholder"></span>
         {/if}
-        <button class="check" title={t.done ? "标记未完成" : "标记完成"} onclick={() => void toggle(t.id)}>
-          {t.done ? "✅" : "⬜"}
+        <button class="check" class:done={t.done} title={t.done ? "标记未完成" : "标记完成"} onclick={() => void toggle(t.id)}>
+          {#if t.done}✓{/if}
         </button>
         <button
           class="prio"
@@ -691,6 +692,27 @@
   .item:hover {
     background: var(--bg-hover);
   }
+  .item.child {
+    position: relative;
+    font-size: 10px;
+  }
+  .item.child::before {
+    content: "";
+    position: absolute;
+    left: 10px;
+    top: -5px;
+    bottom: 0;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--border);
+    opacity: 0.7;
+  }
+  .item.child .text {
+    color: var(--fg-dim);
+  }
+  .item.child.done .text {
+    color: var(--fg-dim);
+  }
   .item.done .text {
     text-decoration: line-through;
     opacity: 0.5;
@@ -717,12 +739,33 @@
     font-variant-numeric: tabular-nums;
   }
   .check {
-    border: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid var(--fg-dim);
     background: transparent;
-    font-size: 11px;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     padding: 0;
     flex-shrink: 0;
+    transition:
+      background 0.15s,
+      border-color 0.15s,
+      transform 0.15s;
+  }
+  .check:hover {
+    border-color: var(--accent);
+    transform: scale(1.08);
+  }
+  .check.done {
+    background: var(--accent);
+    border-color: var(--accent);
   }
   .prio {
     border: none;
