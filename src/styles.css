@@ -1,5 +1,7 @@
 :root,
 :root[data-theme="dark"] {
+  /* 原生控件（时间选择器等）按深色渲染，避免弹出白色背景 */
+  color-scheme: dark;
   --bg: #10141c;
   --bg-elev: #1a2130;
   --bg-input: #141a26;
@@ -15,6 +17,7 @@
 }
 
 :root[data-theme="light"] {
+  color-scheme: light;
   --bg: #eef1f6;
   --bg-elev: #ffffff;
   --bg-input: #f4f6fa;

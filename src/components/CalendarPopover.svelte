@@ -346,6 +346,7 @@
     color: var(--accent);
   }
   .t-input {
+    color-scheme: inherit;
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--bg-input);
