@@ -22,6 +22,7 @@
     onmoveicon,
     onresize,
     onresizeto,
+    onresizeend,
     onsettings,
     ondropat,
     ondropinto,
@@ -46,6 +47,7 @@
     onmoveicon?: (iconId: string) => void;
     onresize?: (iconId: string) => void;
     onresizeto?: (iconId: string, w: number, h: number) => void;
+    onresizeend?: (iconId: string) => void;
     onsettings?: (cellId: string) => void;
     highlightId?: string | null;
     /** 自由摆放落点：dragId 放到 (x, y) 网格坐标 */
@@ -462,6 +464,7 @@
             onmove={() => onmoveicon?.(cell.id)}
                         onresize={() => onresize?.(cell.id)}
             onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
+            onresizeend={onresizeend ? (id) => onresizeend?.(id) : undefined}
             onsettings={() => onsettings?.(cell.id)}
           />
         </div>
@@ -483,6 +486,7 @@
             onedit={() => onediticon?.(cell.id)}
                         onresize={() => onresize?.(cell.id)}
             onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
+            onresizeend={onresizeend ? (id) => onresizeend?.(id) : undefined}
             onsettings={() => onsettings?.(cell.id)}
           />
         </div>

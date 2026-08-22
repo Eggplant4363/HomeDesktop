@@ -27,7 +27,34 @@ pub enum ActionKind {
     SystemApps,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// 提供商容器的子插件清单（二级菜单：一个提供商可提供多个插件，如 HomeAssistant 提供灯/开关/传感器）
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct SubManifest {
+    id: String,
+    name: String,
+    #[serde(rename = "type")]
+    plugin_type: String,
+    #[serde(default)]
+    emoji: Option<String>,
+    #[serde(default)]
+    actions: Vec<ActionSpec>,
+    #[serde(default)]
+    widget_component: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    widget_file: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    widget_element: Option<String>,
+    #[serde(default)]
+    sizes: Vec<Size>,
+    #[serde(default)]
+    settings: Vec<SettingSpec>,
+    /// 子插件专属字段（如 HA 的实体域：light/switch/sensor）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    domain: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Manifest {
     id: String,
@@ -37,6 +64,12 @@ struct Manifest {
     plugin_type: String,
     emoji: Option<String>,
     actions: Vec<ActionSpec>,
+    /// 提供商容器：子插件数组（type=provider 时有效）
+    #[serde(default)]
+    plugins: Vec<SubManifest>,
+    /// 实体域（如 HA 子插件：light/switch/sensor）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    domain: Option<String>,
     /// type=widget 时前端渲染哪个小组件（"clock" | "weather" …；"__plugin__"=插件自带组件）
     widget_component: Option<String>,
     /// 插件自带小组件（M16）：插件目录内的 JS 文件（自定义元素定义）
@@ -108,6 +141,15 @@ pub struct PluginInfo {
     /// 是否内置插件（非用户数据目录安装，不可卸载；M11）
     #[serde(default, skip_serializing_if = "is_false")]
     pub builtin: bool,
+    /// 提供商 id（二级菜单分组；provider 插件自身的子插件带此字段）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_id: Option<String>,
+    /// 提供商名称
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider_name: Option<String>,
+    /// 实体域（HomeAssistant 等子插件专用）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
     /// 插件目录绝对路径（M16：加载插件自带 JS 用 asset 协议）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dir: Option<String>,
@@ -378,7 +420,53 @@ pub fn scan_plugin_dir(dir: &Path, seen: &mut HashSet<String>, out: &mut Vec<Plu
         match fs::read_to_string(&manifest_path) {
             Ok(text) => match serde_json::from_str::<Manifest>(&text) {
                 Ok(m) => {
-                    if seen.insert(m.id.clone()) {
+                    let dir = entry.path().to_string_lossy().into_owned();
+                    if !m.plugins.is_empty() {
+                        // 提供商容器：本身作为 plugin_type=provider 的条目（前端用于二级菜单分组 + 共享设置），
+                        // 子插件逐个展平并带上 provider_id/provider_name
+                        if seen.insert(m.id.clone()) {
+                            out.push(PluginInfo {
+                                id: m.id.clone(),
+                                name: m.name.clone(),
+                                version: m.version.clone(),
+                                plugin_type: "provider".into(),
+                                emoji: m.emoji.clone(),
+                                actions: Vec::new(),
+                                widget_component: None,
+                                widget_file: None,
+                                widget_element: None,
+                                sizes: Vec::new(),
+                                settings: m.settings.clone(),
+                                builtin: false,
+                                provider_id: None,
+                                provider_name: None,
+                                domain: None,
+                                dir: Some(dir.clone()),
+                            });
+                        }
+                        for sub in m.plugins {
+                            if seen.insert(sub.id.clone()) {
+                                out.push(PluginInfo {
+                                    id: sub.id,
+                                    name: sub.name,
+                                    version: m.version.clone(),
+                                    plugin_type: sub.plugin_type,
+                                    emoji: sub.emoji,
+                                    actions: sub.actions,
+                                    widget_component: sub.widget_component,
+                                    widget_file: sub.widget_file,
+                                    widget_element: sub.widget_element,
+                                    sizes: sub.sizes,
+                                    settings: sub.settings,
+                                    builtin: false,
+                                    provider_id: Some(m.id.clone()),
+                                    provider_name: Some(m.name.clone()),
+                                    domain: sub.domain,
+                                    dir: Some(dir.clone()),
+                                });
+                            }
+                        }
+                    } else if seen.insert(m.id.clone()) {
                         out.push(PluginInfo {
                             id: m.id,
                             name: m.name,
@@ -391,8 +479,11 @@ pub fn scan_plugin_dir(dir: &Path, seen: &mut HashSet<String>, out: &mut Vec<Plu
                             widget_element: m.widget_element,
                             sizes: m.sizes,
                             settings: m.settings,
-                            builtin: false, // 是否内置由 collect_plugins_with_builtin 按来源目录标记
-                            dir: Some(entry.path().to_string_lossy().into_owned()),
+                            builtin: false,
+                            provider_id: None,
+                            provider_name: None,
+                            domain: m.domain,
+                            dir: Some(dir),
                         });
                     }
                 }
@@ -1026,6 +1117,9 @@ mod tests {
             sizes: vec![],
             settings: vec![],
             builtin: false,
+            provider_id: None,
+            provider_name: None,
+            domain: None,
             widget_file: None,
             widget_element: None,
             dir: None,
@@ -1048,6 +1142,9 @@ mod tests {
             sizes: vec![],
             settings: vec![],
             builtin: false,
+            provider_id: None,
+            provider_name: None,
+            domain: None,
             widget_file: None,
             widget_element: None,
             dir: None,
@@ -1078,6 +1175,9 @@ mod tests {
                 default: Some(serde_json::json!(true)),
             }],
             builtin: false,
+            provider_id: None,
+            provider_name: None,
+            domain: None,
             widget_file: Some("widget.js".into()),
             widget_element: Some("hd-x-widget".into()),
             dir: Some("C:\\plugins\\x".into()),
@@ -1096,6 +1196,9 @@ mod tests {
         // builtin 标记：true 序列化、false 省略
         let builtin = PluginInfo {
             builtin: true,
+            provider_id: None,
+            provider_name: None,
+            domain: None,
             ..info
         };
         let json = serde_json::to_value(&builtin).unwrap();

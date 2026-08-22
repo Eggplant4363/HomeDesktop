@@ -14,6 +14,7 @@
     onresize,
     onsettings,
     onresizeto,
+    onresizeend,
   }: {
     item: IconCell;
     plugin?: PluginInfo;
@@ -27,6 +28,8 @@
     onsettings?: (id: string) => void;
     /** 拖动右下角手柄自由调整尺寸（0.5 格步进） */
     onresizeto?: (id: string, w: number, h: number) => void;
+    /** 松开手柄时回调（用于一次性持久化，避免拖动过程狂写配置） */
+    onresizeend?: (id: string) => void;
   } = $props();
 
   // ---------- 拖拽缩放手柄 ----------
@@ -74,6 +77,7 @@
     } catch {
       /* 忽略 */
     }
+    onresizeend?.(item.id);
   }
 
   /** 应用抽屉图标：无插件但有自带动作 → 显示系统真实图标（AppIcon 内回退头像） */

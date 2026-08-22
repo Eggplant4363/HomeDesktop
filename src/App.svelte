@@ -743,9 +743,13 @@
     settingsTarget = null;
   }
 
-  /** 拖拽手柄实时调整尺寸（0.5 格步进），实时持久化 */
+  /** 拖拽手柄实时调整尺寸（0.5 格步进）；拖动过程不持久化，松手时 handleResizeEnd 保存一次 */
   function handleResizeTo(iconId: string, w: number, h: number): void {
-    if (setCellSize(iconId, { w, h })) persist();
+    setCellSize(iconId, { w, h });
+  }
+  function handleResizeEnd(iconId: string): void {
+    persist();
+    log.info(`拖拽调整尺寸完成: ${iconId}`);
   }
 
   function handleSettings(cellId: string): void {
@@ -1388,6 +1392,7 @@
         ondropat={handleFolderDropAt}
         onresize={(id) => handleResize(id)}
         onresizeto={(id, w, h) => handleResizeTo(id, w, h)}
+        onresizeend={(id) => handleResizeEnd(id)}
         onsettings={(id) => handleSettings(id)}
       />
     {:else}
@@ -1409,6 +1414,7 @@
         onmoveicon={(id) => handleMove(id)}
         onresize={(id) => handleResize(id)}
         onresizeto={(id, w, h) => handleResizeTo(id, w, h)}
+        onresizeend={(id) => handleResizeEnd(id)}
         onsettings={(id) => handleSettings(id)}
         ondropat={handleDropAt}
         ondropinto={handleDropInto}

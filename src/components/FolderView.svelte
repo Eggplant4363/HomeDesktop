@@ -24,6 +24,7 @@
     ondropat,
     onresize,
     onresizeto,
+    onresizeend,
     onsettings,
   }: {
     onaddclick?: () => void;
@@ -36,6 +37,7 @@
     ondropat?: (folderId: string, iconId: string, x: number, y: number) => void;
     onresize?: (iconId: string) => void;
     onresizeto?: (iconId: string, w: number, h: number) => void;
+    onresizeend?: (iconId: string) => void;
     onsettings?: (cellId: string) => void;
   } = $props();
 
@@ -291,6 +293,7 @@
               onmove={() => onmove?.(icon.id)}
               onresize={() => onresize?.(icon.id)}
             onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
+            onresizeend={onresizeend ? (id) => onresizeend?.(id) : undefined}
               onsettings={() => onsettings?.(icon.id)}
             />
           {:else}
@@ -304,6 +307,7 @@
               onedit={() => onediticon?.(icon.id)}
               onresize={() => onresize?.(icon.id)}
             onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
+            onresizeend={onresizeend ? (id) => onresizeend?.(id) : undefined}
               onsettings={() => onsettings?.(icon.id)}
             />
           {/if}

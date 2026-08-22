@@ -64,13 +64,12 @@ export function addCell(cell: Cell, page = currentPage.index): number {
   }
 }
 
-/** 画布适配：把超出画布（cols 列）或与其他单元重叠的单元移到画布内空位（不重排正常单元）；
- *  若整体仍超出最大行数（内容放不下）→ 把放不下的单元自动移到下一页（不显示滚动条）；返回是否发生调整 */
-export function fitCellsToCols(page: number, cols: number, maxRows?: number): boolean {
-  const arr = layout.pages[page];
-  if (!arr || cols < 1) return false;
-  const rows = maxRows && maxRows > 0 ? maxRows : undefined;
-  let overflowMoved = 0;
+/** 一轮适配：把越界/重叠单元移到画布内空位（不重排正常单元） */
+function fitPass(
+  arr: Cell[],
+  cols: number,
+  rows: number | undefined,
+): { changed: boolean; moved: number } {
   const placed: { x: number; y: number; w: number; h: number }[] = [];
   let changed = false;
   let moved = 0;
@@ -93,47 +92,97 @@ export function fitCellsToCols(page: number, cols: number, maxRows?: number): bo
     changed = true;
     moved += 1;
   }
-  // 仍有单元超出最大行数（本页放不下）→ 自动分页：按当前位置顺序移到下一页的空位（放不下继续往后，直到新建页）
-  if (rows) {
-    const overflow = arr.filter(
-      (c) => (c.y ?? 0) + (c.kind === "folder" ? 1 : c.size.h) > rows,
-    );
-    overflowMoved = overflow.length;
-    if (overflowMoved > 0) {
-      overflow.sort(
-        (a, b) =>
-          (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0) ||
-          (a.kind === "folder" ? 1 : a.size.w) - (b.kind === "folder" ? 1 : b.size.w),
-      );
-      for (const c of overflow) {
-        const i = arr.indexOf(c);
-        if (i >= 0) arr.splice(i, 1);
+  return { changed, moved };
+}
+
+/** 确定性重排（大块优先、行优先）：结果只取决于单元集合，必然收敛（防止振荡死循环） */
+function repackDeterministic(arr: Cell[], cols: number, rows: number | undefined): void {
+  const ordered = [...arr].sort((a, b) => {
+    const ha = a.kind === "folder" ? 1 : a.size.h;
+    const hb = b.kind === "folder" ? 1 : b.size.h;
+    if (hb !== ha) return hb - ha;
+    const wa = a.kind === "folder" ? 1 : a.size.w;
+    const wb = b.kind === "folder" ? 1 : b.size.w;
+    if (wb !== wa) return wb - wa;
+    return (a.id ?? "").localeCompare(b.id ?? "");
+  });
+  const placed: { x: number; y: number; w: number; h: number }[] = [];
+  for (const cell of ordered) {
+    const w = cell.kind === "folder" ? 1 : cell.size.w;
+    const h = cell.kind === "folder" ? 1 : cell.size.h;
+    const slot = findFreeSlot(placed, cols, w, h, rows);
+    cell.x = slot.x;
+    cell.y = slot.y;
+    placed.push({ x: slot.x, y: slot.y, w, h });
+  }
+}
+
+/** 本页放不下的单元 → 自动分页到下一页空位（放不下继续往后，直到新建页）；返回移走数量 */
+function paginateOverflow(
+  arr: Cell[],
+  page: number,
+  cols: number,
+  rows: number | undefined,
+): number {
+  if (!rows) return 0;
+  const overflow = arr.filter(
+    (c) => (c.y ?? 0) + (c.kind === "folder" ? 1 : c.size.h) > rows,
+  );
+  if (overflow.length === 0) return 0;
+  overflow.sort(
+    (a, b) =>
+      (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0) ||
+      (a.kind === "folder" ? 1 : a.size.w) - (b.kind === "folder" ? 1 : b.size.w),
+  );
+  for (const c of overflow) {
+    const i = arr.indexOf(c);
+    if (i >= 0) arr.splice(i, 1);
+  }
+  let p = page + 1;
+  for (const c of overflow) {
+    const w = c.kind === "folder" ? 1 : c.size.w;
+    const h = c.kind === "folder" ? 1 : c.size.h;
+    for (;;) {
+      if (!layout.pages[p]) layout.pages[p] = [];
+      const slot = findFreeSlot(layout.pages[p].map(cellRect), cols, w, h, rows);
+      if (slot.x + w <= cols && slot.y + h <= rows) {
+        c.x = slot.x;
+        c.y = slot.y;
+        layout.pages[p].push(c);
+        break;
       }
-      let p = page + 1;
-      for (const c of overflow) {
-        const w = c.kind === "folder" ? 1 : c.size.w;
-        const h = c.kind === "folder" ? 1 : c.size.h;
-        for (;;) {
-          if (!layout.pages[p]) layout.pages[p] = [];
-          const slot = findFreeSlot(layout.pages[p].map(cellRect), cols, w, h, rows);
-          if (slot.x + w <= cols && slot.y + h <= rows) {
-            c.x = slot.x;
-            c.y = slot.y;
-            layout.pages[p].push(c);
-            break;
-          }
-          p++;
-        }
-      }
-      changed = true;
-      moved += overflowMoved;
+      p++;
     }
   }
+  return overflow.length;
+}
+
+/** 画布适配：越界/重叠 → 画布内空位；仍超出最大行数 → 自动分页（不显示滚动条）。
+ *  多轮适配仍不稳定（如小数尺寸引起振荡）→ 确定性重排兜底，保证收敛、绝不死循环。返回是否发生调整 */
+export function fitCellsToCols(page: number, cols: number, maxRows?: number): boolean {
+  const arr = layout.pages[page];
+  if (!arr || cols < 1) return false;
+  const rows = maxRows && maxRows > 0 ? maxRows : undefined;
+  let moved = 0;
+  let rounds = 0;
+  for (let round = 0; round < 4; round++) {
+    const r = fitPass(arr, cols, rows);
+    if (!r.changed) break;
+    moved += r.moved;
+    rounds = round + 1;
+  }
+  if (rounds >= 4) {
+    // 多次适配仍不稳定（振荡）→ 确定性重排，必然收敛
+    repackDeterministic(arr, cols, rows);
+    moved += arr.length;
+  }
+  const overflowMoved = paginateOverflow(arr, page, cols, rows);
+  moved += overflowMoved;
   if (moved > 0)
     log.info(
-      `画布适配: 第 ${page + 1} 页 ${cols} 列${rows ? ` ${rows} 行` : ""}，调整 ${moved} 个单元${overflowMoved > 0 ? `（其中 ${overflowMoved} 个自动移到下一页）` : ""}`,
+      `画布适配: 第 ${page + 1} 页 ${cols} 列${rows ? ` ${rows} 行` : ""}，调整 ${moved} 个单元${overflowMoved > 0 ? `（其中 ${overflowMoved} 个自动移到下一页）` : ""}${rounds >= 4 ? "（重排兜底）" : ""}`,
     );
-  return changed;
+  return moved > 0;
 }
 export function removeCell(id: string, page = currentPage.index): void {
   const arr = layout.pages[page];

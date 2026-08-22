@@ -12,6 +12,7 @@
     onresize,
     onsettings,
     onresizeto,
+    onresizeend,
   }: {
     item: IconCell;
     /** 编辑模式：常显缩放/移入/删除操作 */
@@ -22,6 +23,8 @@
     onsettings?: (id: string) => void;
     /** 拖动右下角手柄自由调整尺寸（0.5 格步进） */
     onresizeto?: (id: string, w: number, h: number) => void;
+    /** 松开手柄时回调（一次性持久化） */
+    onresizeend?: (id: string) => void;
   } = $props();
 
   // ---------- 拖拽缩放手柄 ----------
@@ -69,6 +72,7 @@
     } catch {
       /* 忽略 */
     }
+    onresizeend?.(item.id);
   }
 
   const plugin = $derived(plugins.find((p) => p.id === item.pluginId));
