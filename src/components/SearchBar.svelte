@@ -6,8 +6,11 @@
   <span class="glass">🔍</span>
   <input
     type="text"
-    placeholder="搜索应用 / 插件…"
+    placeholder="搜索应用 / 插件 / 智能家居…"
     bind:value={query.text}
+    oncompositionend={(e) => {
+      query.text = (e.currentTarget as HTMLInputElement).value; // IME 组词结束强制取最终值
+    }}
   />
   {#if query.text}
     <button class="clear" onclick={() => (query.text = "")}>×</button>

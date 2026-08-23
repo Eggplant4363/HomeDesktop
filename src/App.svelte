@@ -11,6 +11,7 @@
   import { installPlugin, loadPlugins, launchCell } from "./core/pluginLoader";
   import type { AppInfo } from "./core/pluginLoader";
   import { loadLayout, saveLayout } from "./core/persistence";
+  import { clearFocusCell, getFocusCell } from "./core/stores.svelte";
   import {
     addCell,
     addIconToFolder,
@@ -80,6 +81,14 @@
       if (addedFlashId === id) addedFlashId = null;
     }, 1600);
   }
+  // 监听搜索定位：切页后闪现目标单元格
+  $effect(() => {
+    const f = getFocusCell();
+    if (f) {
+      flashAdded(f);
+      clearFocusCell();
+    }
+  });
   let showSettings = $state(false);
   /** 系统应用面板（内置「系统应用」插件点击后打开） */
   let showSystemApps = $state(false);
@@ -1448,6 +1457,7 @@
         ondropinto={handleDropInto}
         onflipprev={handlePrev}
         onflipnext={handleNext}
+        onwheelnav={(dir) => onSwipeEnd(-dir * (slideWrap?.clientWidth || window.innerWidth) * 0.3)}
           onfitted={() => persist()}
           onblankclick={hideWindow}
           onswipemove={onSwipeMove}

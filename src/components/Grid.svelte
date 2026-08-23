@@ -28,6 +28,7 @@
     ondropinto,
     onflipprev,
     onflipnext,
+    onwheelnav,
     onfitted,
     onblankclick,
     /** 新添加的单元 id：播放"弹出 + 光环"入场特效（无则不高亮） */
@@ -55,6 +56,8 @@
     ondropinto?: (dragId: string, folderId: string) => void;
     onflipprev?: () => void;
     onflipnext?: () => void;
+    /** 滚轮翻页（带滑动动画） */
+    onwheelnav?: (dir: 1 | -1) => void;
     /** 画布适配调整了布局后回调（用于持久化） */
     onfitted?: () => void;
     /** 点击空白区域（非编辑模式、非拖拽）→ 外层隐藏应用 */
@@ -416,6 +419,26 @@
       edgeTimer = undefined;
     }
   }
+
+  /** 鼠标滚轮翻页（正常模式）：上滚上一页、下滚下一页；落在可滚动内容上则不翻页 */
+  let lastWheelFlip = 0;
+  function onWheel(e: WheelEvent): void {
+    if (ui.editMode) return;
+    let el: HTMLElement | null = e.target as HTMLElement;
+    while (el && el !== gridEl) {
+      const oy = getComputedStyle(el).overflowY;
+      if (oy === "auto" || oy === "scroll") return; // 小组件内部列表：交给它滚动
+      el = el.parentElement;
+    }
+    const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+    if (Math.abs(delta) < 20) return;
+    e.preventDefault();
+    const now = Date.now();
+    if (now - lastWheelFlip < 400) return;
+    lastWheelFlip = now;
+    if (delta > 0) onwheelnav?.(1);
+    else onwheelnav?.(-1);
+  }
 </script>
 
 <div
@@ -428,6 +451,7 @@
   onpointerup={onPointerUp}
   onpointercancel={onPointerCancel}
   onclick={onClickCapture}
+  onwheel={onWheel}
   onkeydown={(e) => {
     if (e.key === "Escape") endDrag();
   }}
