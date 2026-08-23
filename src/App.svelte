@@ -1439,7 +1439,7 @@
         style="transform: translateX({slideX}px); transition: {slideTransition};"
       >
         <Grid
-          cells={layout.pages[currentPage.index] ?? []}
+          cells={query.text ? layout.pages.flat() : layout.pages[currentPage.index] ?? []}
           queryText={query.text}
           highlightId={addedFlashId}
         onlaunch={(id) => handleLaunch(id)}

@@ -7,6 +7,7 @@
   import type { AppInfo } from "../core/pluginLoader";
   import AppIcon from "./AppIcon.svelte";
   import { getAllSearchEntries } from "../core/searchNames.svelte";
+  import { matchesPinyin } from "../core/pinyinSearch";
 
   let {
     onclose,
@@ -89,7 +90,7 @@
 
   const flat = $derived(
     query
-      ? candidates.filter((r) => r.title.toLowerCase().includes(query.toLowerCase()))
+      ? candidates.filter((r) => matchesPinyin(r.title, query.toLowerCase()))
       : candidates,
   );
 
