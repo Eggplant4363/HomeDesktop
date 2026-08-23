@@ -4,11 +4,14 @@
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { getCellSetting, peekCellSetting } from "../core/pluginSettings.svelte";
-  import { registerWidget, unregisterWidget } from "../core/widgetRuntime.svelte";
+  import { registerWidget, unregisterWidget, widgetCache, getWidgetData } from "../core/widgetRuntime.svelte";
   import { log } from "../core/logger";
   import { layout, plugins } from "../core/stores.svelte";
   import { appearance } from "../core/appearance.svelte";
   import { iconGlyphSize } from "../core/iconStandard";
+  import { registerSearchNames, markProviderFetched } from "../core/searchNames.svelte";
+  import { focusCell } from "../core/stores.svelte";
+
   import { getPluginSetting, peekPluginSetting } from "../core/pluginSettings.svelte";
   import MdiIcon from "../components/MdiIcon.svelte";
 
@@ -167,6 +170,7 @@
       const filtered = domain ? data.filter((s) => s.domain === domain) : data;
       states = filtered;
       error = null;
+      if (cellId) widgetCache[cellId] = { data: filtered, fetchedAt: Date.now() };
       return filtered;
     } catch (e) {
       error = String(e);
@@ -198,8 +202,15 @@
         fetch: () => (configured ? fetchStates() : Promise.resolve(states)),
       });
     }
+    // 挂载时从运行时缓存恢复状态（搜索过滤重挂时立即显示，不闪"连接中"）
+    const cached = cellId ? getWidgetData<HaState[]>(cellId) : undefined;
+    if (cached) {
+      states = cached;
+      loading = false;
+    }
     const init = async () => {
       await getPluginSetting(providerId, "url", "");
+      await registerHaAllEntities(providerId, url, token);
       await getPluginSetting(providerId, "token", "");
       await getCellSetting(cellId ?? providerId, providerId, "entities", "");
       // 预热 icons/names 缓存（触发响应式更新）
@@ -213,6 +224,41 @@
       clearInterval(timer);
       if (cellId) unregisterWidget(cellId);
     };
+  });
+
+  /** 抓取提供商下全部实体并注册为搜索名（"客厅灯"等任意实体可搜到），按提供商去重 */
+  async function registerHaAllEntities(pid: string, u: string, tk: string): Promise<void> {
+    if (!cellId || !u || !tk) return;
+    if (!markProviderFetched(pid)) return;
+    try {
+      const all = await invoke<HaState[]>("ha_entities", { url: u, token: tk, domain: null });
+      const entries: { label: string; sublabel: string; emoji: string; pluginId: string; action: () => void }[] = all.map((s) => ({
+        label: s.friendlyName || s.entityId,
+        sublabel: s.entityId,
+        emoji: "🏠",
+        pluginId: pid,
+        action: () => focusCell(cellId!),
+      }));
+      registerSearchNames(pid, entries);
+      log.info(`HA 搜索名注册: ${pid} 共 ${entries.length} 个实体`);
+    } catch (e) {
+      log.error(`HA 搜索名注册失败: ${e}`);
+    }
+  }
+
+  // 按 widget 注册配置实体（显示名=自定义||友好名，点击定位到本小组件）
+  $effect(() => {
+    if (!cellId) return;
+    const entries = states.map((s) => ({
+      label: nameOf(s),
+      sublabel: s.entityId,
+      emoji: "🏠",
+      pluginId: providerId,
+      action: () => focusCell(cellId!),
+    }));
+    // 粘性注册：不随卸载清除；states 为空时不覆盖（搜索过滤重挂载时会先空后填，防止清掉条目）
+    if (states.length === 0) return;
+    registerSearchNames(`cell.${cellId}`, entries);
   });
 
   function isOn(s: HaState): boolean {

@@ -6,6 +6,7 @@
   import { scanApps } from "../core/pluginLoader";
   import type { AppInfo } from "../core/pluginLoader";
   import AppIcon from "./AppIcon.svelte";
+  import { getAllSearchEntries } from "../core/searchNames.svelte";
 
   let {
     onclose,
@@ -25,7 +26,8 @@
     | { kind: "icon"; id: string; title: string; emoji: string; group: "桌面" }
     | { kind: "folder"; id: string; title: string; emoji: string; group: "桌面" }
     | { kind: "plugin"; id: string; title: string; emoji: string; group: "插件" }
-    | { kind: "app"; id: string; title: string; path: string; group: "应用" };
+    | { kind: "app"; id: string; title: string; path: string; group: "应用" }
+    | { kind: "entry"; id: string; title: string; sublabel?: string; emoji: string; group: "智能家居"; action?: () => void };
 
   let query = $state("");
   let apps = $state<AppInfo[]>([]);
@@ -70,6 +72,18 @@
     for (const a of apps) {
       list.push({ kind: "app", id: a.path, title: a.name, path: a.path, group: "应用" });
     }
+    // 插件注册的搜索名（如 HomeAssistant 实体"客厅灯"）
+    for (const e of getAllSearchEntries()) {
+      list.push({
+        kind: "entry",
+        id: e.sublabel || e.label,
+        title: e.label,
+        sublabel: e.sublabel,
+        emoji: e.emoji ?? "🏠",
+        group: "智能家居",
+        action: e.action,
+      });
+    }
     return list;
   });
 
@@ -84,7 +98,10 @@
     if (r.kind === "icon") onopenicon?.(r.id);
     else if (r.kind === "folder") onopenfolder?.(r.id);
     else if (r.kind === "plugin") onopenplugin?.(r.id);
-    else onopenapp?.(r.path);
+    else if (r.kind === "entry") {
+      r.action?.();
+      onclose?.();
+    } else onopenapp?.(r.path);
   }
 
   function onInputKeydown(e: KeyboardEvent): void {
@@ -121,6 +138,10 @@
         bind:value={query}
         onkeydown={onInputKeydown}
         oninput={() => (sel = 0)}
+        oncompositionend={(e) => {
+          query = (e.currentTarget as HTMLInputElement).value; // IME 组词结束强制取最终值
+          sel = 0;
+        }}
       />
       <button class="close" onclick={onclose} title="关闭（Esc）">×</button>
     </div>
@@ -140,7 +161,9 @@
             {:else}
               <span class="emoji">{r.emoji}</span>
             {/if}
-            <span class="name">{r.title}</span>
+            <span class="name">
+              {r.title}{#if r.kind === "entry" && r.sublabel}<span class="sub">{r.sublabel}</span>{/if}
+            </span>
             <span class="tag">{r.group}</span>
           </button>
         {/each}
@@ -232,6 +255,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .sub {
+    margin-left: 6px;
+    font-size: 11px;
+    color: var(--fg-dim);
   }
   .tag {
     font-size: 10px;

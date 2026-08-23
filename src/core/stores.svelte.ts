@@ -533,6 +533,33 @@ export function repairLayoutForPersist(): void {
   }
 }
 
+/** 搜索聚焦（App 监听）：内部 $state + 派生读取函数（避免直接导出可变 $state） */
+let _focus = $state<string | null>(null);
+
+/** 请求聚焦某单元格：切换其所在页（App 监听后闪现） */
+export function focusCell(id: string): void {
+  for (let p = 0; p < layout.pages.length; p++) {
+    const has = layout.pages[p].some(
+      (c) => c.id === id || (c.kind === "folder" && c.items.some((i) => i.id === id)),
+    );
+    if (has) {
+      currentPage.index = p;
+      break;
+    }
+  }
+  _focus = id;
+}
+
+/** 读取聚焦请求（响应式） */
+export function getFocusCell(): string | null {
+  return _focus;
+}
+
+/** 清除聚焦请求（App 处理后调用） */
+export function clearFocusCell(): void {
+  _focus = null;
+}
+
 // ---------- 页面操作 ----------
 
 export function addPage(): void {
