@@ -1,6 +1,7 @@
 // 搜索过滤纯函数（便于单元测试）
 import type { Cell, IconCell, PluginInfo } from "./types";
 import { getSearchEntriesForCell } from "./searchNames.svelte";
+import { matchesPinyin } from "./pinyinSearch";
 
 /** 主网格搜索：图标按标题/插件名，文件夹按名称/emoji */
 export function filterCells(
@@ -19,11 +20,10 @@ export function filterCells(
     }
     const p = plugins.find((x) => x.id === cell.pluginId);
     const titleMatch =
-      cell.title.toLowerCase().includes(q) ||
-      (p?.name ?? "").toLowerCase().includes(q);
-    // 小组件：其注册的搜索名命中（如 HA 实体"客厅灯"）也显示该小组件
+      matchesPinyin(cell.title, q) || matchesPinyin(p?.name ?? "", q);
+    // 小组件：其注册的搜索名命中（如 HA 实体"客厅灯"，支持拼音）也显示该小组件
     const entryMatch = getSearchEntriesForCell(cell.id).some((e) =>
-      e.label.toLowerCase().includes(q),
+      matchesPinyin(e.label, q),
     );
     return titleMatch || entryMatch;
   });
@@ -40,9 +40,6 @@ export function filterIcons(
   const q = queryText.toLowerCase();
   return items.filter((it) => {
     const p = plugins.find((x) => x.id === it.pluginId);
-    return (
-      it.title.toLowerCase().includes(q) ||
-      (p?.name ?? "").toLowerCase().includes(q)
-    );
+    return matchesPinyin(it.title, q) || matchesPinyin(p?.name ?? "", q);
   });
 }

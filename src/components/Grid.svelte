@@ -119,12 +119,34 @@
 
   const visible = $derived(filterCells(cells, plugins, queryText));
 
-  /** 单元像素几何（画布内） */
+  /** 搜索模式：命中 cell 从左上角紧凑依次排列（不改变存储坐标，仅显示用） */
+  const packed = $derived.by(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    if (!queryText) return map;
+    let cx = 0, cy = 0, rowH = 0;
+    for (const cell of visible) {
+      const w = cell.kind === "folder" ? 1 : cell.size.w;
+      const h = cell.kind === "folder" ? 1 : cell.size.h;
+      if (cx + w > Math.max(1, cols)) { cx = 0; cy += rowH; rowH = 0; }
+      map.set(cell.id, { x: cx, y: cy });
+      cx += w;
+      rowH = Math.max(rowH, h);
+    }
+    return map;
+  });
+
+  /** 单元像素几何（画布内）——搜索时用紧凑占位，否则用存储坐标 */
+  function effX(cell: Cell): number {
+    return packed.get(cell.id)?.x ?? cell.x ?? 0;
+  }
+  function effY(cell: Cell): number {
+    return packed.get(cell.id)?.y ?? cell.y ?? 0;
+  }
   function pxX(cell: Cell): number {
-    return PAD + (cell.x ?? 0) * SLOT;
+    return PAD + effX(cell) * SLOT;
   }
   function pxY(cell: Cell): number {
-    return PAD + (cell.y ?? 0) * SLOT;
+    return PAD + effY(cell) * SLOT;
   }
   function pxW(cell: Cell): number {
     const w = cell.kind === "folder" ? 1 : cell.size.w;
@@ -555,6 +577,7 @@
     margin: 0 auto;
   }
   .drop-wrap {
+    transition: left 0.28s cubic-bezier(0.25, 0.1, 0.25, 1), top 0.28s cubic-bezier(0.25, 0.1, 0.25, 1);
     position: absolute;
     touch-action: pan-y;
   }
