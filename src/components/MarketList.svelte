@@ -17,7 +17,7 @@
 
   // 默认在线市场索引（HomeDesktopPlugins 仓库 jsDelivr CDN）
   const DEFAULT_INDEX_URL =
-    "https://cdn.jsdelivr.net/gh/Eggplant4363/HomeDesktopPlugins@37220b53bf98d2ed24349467784eec7b232a9f38/market/index.json";
+    "https://cdn.jsdelivr.net/gh/Eggplant4363/HomeDesktopPlugins@437e4221938c14ffa76fbe77028fa18df98234f6/market/index.json";
 
   let tab = $state<"local" | "online">("local");
 
