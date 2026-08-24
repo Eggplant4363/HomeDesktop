@@ -8,7 +8,7 @@
   import { log } from "../core/logger";
   import { layout, plugins } from "../core/stores.svelte";
   import { appearance } from "../core/appearance.svelte";
-  import { iconGlyphSize } from "../core/iconStandard";
+  import { iconGlyphSize, iconEmojiFontSize } from "../core/iconStandard";
   import { registerSearchNames, markProviderFetched } from "../core/searchNames.svelte";
   import { focusCell } from "../core/stores.svelte";
 
@@ -36,6 +36,30 @@
 
   /** 提供商 id（共享配置键）：子插件 → providerId；旧单插件格式 → 插件自身 id */
   const providerId = $derived((myPlugin?.providerId as string | undefined) ?? myPlugin?.id ?? "");
+
+  /** 本实例对应的 cell（读取自定义 emoji/颜色/显示名称） */
+  const myCell = $derived.by(() => {
+    if (!cellId) return undefined;
+    for (const page of layout.pages) {
+      for (const c of page) {
+        if (c.kind === "folder") {
+          const sub = c.items.find((i) => i.id === cellId);
+          if (sub) return sub;
+        } else if (c.id === cellId) {
+          return c;
+        }
+      }
+    }
+    return undefined;
+  });
+  /** 自定义 emoji（自定义弹窗 📝 设置；非空时替代 MDI 圆钮显示） */
+  const customEmoji = $derived(myCell?.emoji ?? "");
+  /** 自定义颜色（开状态圆钮底色；空=琥珀色 FFC107） */
+  const customColor = $derived(myCell?.color ?? "");
+  /** 自定义名称（cell.<cellId>.name；空=用实体名） */
+  const customName = $derived(
+    peekCellSetting<string>(cellId ?? "", providerId, "name") ?? "",
+  );
   /** 实体域过滤（子插件专用；空 = 全部） */
   const domain = $derived((myPlugin?.domain as string | undefined) ?? "");
 
@@ -114,6 +138,8 @@
   // 圆形图标 = 统一标准图标尺寸（与其他插件一致，保证文字同水平线）
   const haTile = $derived(iconGlyphSize(appearance.tileSize));
   const haIcon = $derived(iconGlyphSize(appearance.tileSize) - 10);
+  /** 自定义 emoji 字号（与系统图标 emoji 一致） */
+  const haEmojiSize = $derived(iconEmojiFontSize(appearance.tileSize));
 
   /** 实体图标：自定义优先；否则按"状态 + 域"选（HA 风格：开=实心彩色、关=空心灰） */
   function iconOf(s: HaState): string {
@@ -148,8 +174,8 @@
     camera: "#ec407a",
   };
   function tileColor(s: HaState): string {
-    // 开的状态统一琥珀色（FFC107）
-    return "#FFC107";
+    // 开的状态：自定义颜色优先，否则琥珀色（FFC107）
+    return customColor || "#FFC107";
   }
 
   /** 展示第一个实例（设置菜单里勾选的第一个） */
@@ -198,7 +224,7 @@
     if (cellId) {
       registerWidget<HaState[]>({
         id: cellId,
-        refreshMs: 2000,
+        refreshMs: 1000,
         fetch: () => (configured ? fetchStates() : Promise.resolve(states)),
       });
     }
@@ -213,13 +239,14 @@
       await registerHaAllEntities(providerId, url, token);
       await getPluginSetting(providerId, "token", "");
       await getCellSetting(cellId ?? providerId, providerId, "entities", "");
-      // 预热 icons/names 缓存（触发响应式更新）
+      // 预热 icons/names/name 缓存（触发响应式更新）
       await getCellSetting<string>(cellId ?? providerId, providerId, "icons", "");
       await getCellSetting<string>(cellId ?? providerId, providerId, "names", "");
+      await getCellSetting<string>(cellId ?? providerId, providerId, "name", "");
       void refresh();
     };
     void init();
-    const timer = setInterval(() => void refresh(), 2000);
+    const timer = setInterval(() => void refresh(), 1000);
     return () => {
       clearInterval(timer);
       if (cellId) unregisterWidget(cellId);
@@ -250,7 +277,7 @@
   $effect(() => {
     if (!cellId) return;
     const entries = states.map((s) => ({
-      label: nameOf(s),
+      label: customName || nameOf(s),
       sublabel: s.entityId,
       emoji: "🏠",
       pluginId: providerId,
@@ -328,16 +355,29 @@
     </div>
   {:else}
     <div class="main" title={shown.entityId}>
-      <button
-        class="icon-tile"
-        style="width:{haTile}px;height:{haTile}px;--dc:{tileColor(shown)}"
-        class:on={shownOn}
-        class:togglable={isToggleable(shown)}
-        disabled={working}
-        title={isToggleable(shown) ? (shownOn ? "点击关闭" : "点击开启") : shown.entityId}
-        onclick={() => isToggleable(shown) && void toggle(shown)}
-      ><MdiIcon name={iconOf(shown)} size={haIcon} /></button>
-      <div class="name">{nameOf(shown)}</div>
+      {#if customEmoji}
+        <!-- 自定义图标（📝 弹窗设置，与系统图标一致）：纯 emoji，仍可点击切换 -->
+        <button
+          class="emoji-tile"
+          class:togglable={isToggleable(shown)}
+          disabled={working}
+          title={isToggleable(shown) ? (shownOn ? "点击关闭" : "点击开启") : shown.entityId}
+          onclick={() => isToggleable(shown) && void toggle(shown)}
+        ><span class="emoji" style="font-size:{haEmojiSize}px;">{customEmoji}</span></button>
+      {:else}
+        <button
+          class="icon-tile"
+          style="width:{haTile}px;height:{haTile}px;--dc:{tileColor(shown)}"
+          class:on={shownOn}
+          class:togglable={isToggleable(shown)}
+          disabled={working}
+          title={isToggleable(shown) ? (shownOn ? "点击关闭" : "点击开启") : shown.entityId}
+          onclick={() => isToggleable(shown) && void toggle(shown)}
+        ><MdiIcon name={iconOf(shown)} size={haIcon} /></button>
+      {/if}
+      {#if myCell?.showLabel !== false}
+        <div class="name">{customName || nameOf(shown)}</div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -388,6 +428,27 @@
     background: var(--dc);
     border-color: var(--dc);
     color: #fff;
+  }
+  .emoji-tile {
+    border: none;
+    background: transparent;
+    padding: 0;
+    line-height: 1;
+    cursor: default;
+    flex-shrink: 0;
+  }
+  .emoji-tile.togglable {
+    cursor: pointer;
+  }
+  .emoji-tile.togglable:hover {
+    transform: scale(1.06);
+  }
+  .emoji-tile.togglable:active {
+    transform: scale(0.95);
+  }
+  .emoji {
+    display: block;
+    line-height: 1;
   }
   .name {
     font-size: 13px;

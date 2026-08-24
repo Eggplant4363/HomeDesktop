@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import Grid from "./components/Grid.svelte";
   import FolderView from "./components/FolderView.svelte";
+  import { fade } from "svelte/transition";
   import PluginSettingsMenu from "./components/PluginSettingsMenu.svelte";
   import HaSettingsMenu from "./components/HaSettingsMenu.svelte";
   import SearchBar from "./components/SearchBar.svelte";
@@ -11,7 +12,7 @@
   import { installPlugin, loadPlugins, launchCell } from "./core/pluginLoader";
   import type { AppInfo } from "./core/pluginLoader";
   import { loadLayout, saveLayout } from "./core/persistence";
-  import { clearFocusCell, getFocusCell } from "./core/stores.svelte";
+  import { clearFocusCell, getFocusCell, repackFolder } from "./core/stores.svelte";
   import {
     addCell,
     addIconToFolder,
@@ -50,6 +51,8 @@
     tileSizePresets,
   } from "./core/appearance.svelte";
   import { getWidgetDef } from "./widgets";
+  import { peekCellSetting, setCellSetting } from "./core/pluginSettings.svelte";
+  import { getWidgetData } from "./core/widgetRuntime.svelte";
   import {
     autostartEnabled,
     getSearchShortcut,
@@ -122,6 +125,9 @@
   let iconEditEmoji = $state("");
   let iconEditColor = $state("");
   let iconEditIconPath = $state("");
+  let iconEditShowLabel = $state(true);
+  /** 当前编辑的是否为小组件（智能家居等）：弹窗隐藏"借用系统图标"，名称存实例设置 */
+  let iconEditIsWidget = $state(false);
   let showIconBorrow = $state(false);
   /** 通用确认框（所有删除操作都要确认）：null = 未打开 */
   let confirmAction = $state<{ title: string; message: string; onConfirm: () => void } | null>(
@@ -264,6 +270,34 @@
   let windowHidden = $state(false);
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
 
+  /** cubic-bezier(0.25, 0.1, 0.25, 1)（CSS ease）求值，与 .shell 窗口过渡一致 */
+  function easeBezier(t: number): number {
+    const x1 = 0.25, y1 = 0.1, x2 = 0.25, y2 = 1;
+    const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+    const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+    const sample = (a: number, b: number, c: number, u: number) => ((a * u + b) * u + c) * u;
+    const deriv = (a: number, b: number, c: number, u: number) => (3 * a * u + 2 * b) * u + c;
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    let x = t;
+    for (let i = 0; i < 8; i++) {
+      const err = sample(ax, bx, cx, x) - t;
+      if (Math.abs(err) < 1e-6) break;
+      x -= err / deriv(ax, bx, cx, x);
+    }
+    return sample(ay, by, cy, x);
+  }
+
+  /** 与应用窗口显示/隐藏一致的过渡：淡入淡出 + 轻微缩放（0.96 → 1） */
+  function windowLike(node: HTMLElement) {
+    void node;
+    return {
+      duration: 200,
+      easing: easeBezier,
+      css: (t: number) => `opacity: ${t}; transform: scale(${0.96 + 0.04 * t})`,
+    };
+  }
+
   /** 隐藏本应用窗口（启动外部应用/网页后、或点击空白区域时；Alt+Space/托盘可再唤出）
    *  特效开启：先播 200ms 淡出缩放，动画结束再真正隐藏；关闭：立即隐藏 */
   function hideWindow(): void {
@@ -372,9 +406,15 @@
     handleLaunch(cellId);
   }
 
+  /** 打开文件夹：内部图标从左上角紧凑排列并持久化 */
+  function handleOpenFolder(folderId: string): void {
+    openFolder.folderId = folderId;
+    if (repackFolder(folderId)) persist();
+  }
+
   function handleSearchOpenFolder(folderId: string): void {
     closeSearch();
-    openFolder.folderId = folderId;
+    handleOpenFolder(folderId);
     log.info(`搜索打开文件夹: ${folderId}`);
   }
 
@@ -549,12 +589,12 @@
       });
   }
 
-  /** 选中应用：原位替换「系统应用」槽位图标（保持位置不变） */
-  function handlePickApp(app: AppInfo): void {
-    if (systemAppsSource && replaceCellWithApp(systemAppsSource, app)) {
+  /** 选中应用/文件/文件夹：原位替换「系统应用」槽位图标（保持位置不变） */
+  function handlePickApp(app: AppInfo & { emoji?: string; iconPath?: string }): void {
+    if (systemAppsSource && replaceCellWithApp(systemAppsSource, app, app.emoji, app.iconPath)) {
       persist();
-      log.info(`应用槽位替换: ${systemAppsSource} -> ${app.name} (${app.path})`);
-      toast(`已添加应用：${app.name}`);
+      log.info(`槽位替换: ${systemAppsSource} -> ${app.name} (${app.path})`);
+      toast(`已添加：${app.name}`);
     } else {
       toast("未找到「系统应用」图标，请重新添加");
     }
@@ -722,6 +762,7 @@
     iconEditEmoji = icon.emoji ?? "";
     iconEditColor = icon.color ?? "";
     iconEditIconPath = icon.iconPath ?? "";
+    iconEditShowLabel = icon.showLabel !== false;
   }
 
   /** 保存图标自定义（重命名/emoji/颜色/借用系统图标），空值=清除回退默认 */
@@ -733,6 +774,7 @@
       emoji: iconEditEmoji,
       color: iconEditColor,
       iconPath: iconEditIconPath,
+      showLabel: iconEditShowLabel,
     });
     persist();
     log.info(
@@ -1154,7 +1196,7 @@
             class="spacing-range"
             type="range"
             min="0"
-            max="12"
+            max="30"
             step="1"
             value={appearance.gridSpacing}
             oninput={(e) => handleSetGridSpacing(Number((e.currentTarget as HTMLInputElement).value))}
@@ -1299,6 +1341,14 @@
             placeholder="图标名称"
             bind:value={iconEditTitle}
           />
+          <button
+            class="fe-toggle"
+            class:on={iconEditShowLabel}
+            title="是否在桌面上显示名称"
+            onclick={() => (iconEditShowLabel = !iconEditShowLabel)}
+          >
+            {iconEditShowLabel ? "👁 显示" : "🙈 隐藏"}
+          </button>
         </div>
         <div class="fe-row">
           <span class="fe-label">图标</span>
@@ -1420,6 +1470,7 @@
 
   <section class="content">
     {#if inFolder}
+      <div class="folder-wrap" transition:windowLike>
       <FolderView
         onaddclick={() => (showAdd = true)}
         onlaunch={(id) => handleLaunch(id)}
@@ -1432,9 +1483,11 @@
         onresizeend={(id) => handleResizeEnd(id)}
         onsettings={(id) => handleSettings(id)}
       />
+      </div>
     {:else}
       <div
         class="page-slide"
+        transition:fade={{ duration: 200 }}
         bind:this={slideWrap}
         style="transform: translateX({slideX}px); transition: {slideTransition};"
       >
@@ -1445,7 +1498,7 @@
         onlaunch={(id) => handleLaunch(id)}
         ondelete={(id) => handleDelete(id)}
         onaddclick={() => (showAdd = true)}
-        onopenfolder={(id) => (openFolder.folderId = id)}
+        onopenfolder={(id) => handleOpenFolder(id)}
         oneditfolder={(id) => handleEditFolder(id)}
         onediticon={(id) => handleEditIcon(id)}
         onmoveicon={(id) => handleMove(id)}
@@ -1548,6 +1601,9 @@
     overflow: hidden;
   }
   /* 页面左右滑动容器（切页动画） */
+  .folder-wrap {
+    height: 100%;
+  }
   .page-slide {
     height: 100%;
     will-change: transform;
@@ -1722,12 +1778,13 @@
   }
   .fe-input {
     flex: 1;
+    min-width: 0;
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: 7px;
     background: var(--bg-input);
     color: var(--fg);
-    font-size: 13px;
-    padding: 7px 10px;
+    font-size: 12px;
+    padding: 4px 8px;
     outline: none;
   }
   .fe-input:focus {
@@ -1783,6 +1840,25 @@
   }
   .fe-btn.save.cf-danger {
     background: var(--danger);
+  }
+  .fe-toggle {
+    flex-shrink: 0;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--fg-dim);
+    font-size: 12px;
+    padding: 7px 10px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .fe-toggle:hover {
+    border-color: var(--accent);
+  }
+  .fe-toggle.on {
+    border-style: solid;
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .cf-text {
     padding: 4px 12px 8px;

@@ -7,10 +7,8 @@
     findFolder,
     openFolder,
     plugins,
-    query,
     ui,
   } from "../core/stores.svelte";
-  import { filterIcons } from "../core/search";
   import { appearance } from "../core/appearance.svelte";
   import type { IconCell, PluginInfo } from "../core/types";
   import { FOLDER_COLS } from "../core/layout";
@@ -53,9 +51,8 @@
     return pluginOf(icon)?.pluginType === "widget";
   }
 
-  const visible = $derived(
-    folder ? filterIcons(folder.items, plugins, query.text) : [],
-  );
+  // 完整文件夹：始终显示全部图标（不受全局搜索过滤，避免"过滤功能"错觉与移动冲突）
+  const visible = $derived(folder ? folder.items : []);
 
   // ---------- 文件夹内拖拽（自由摆放：吸附网格、不自动重排） ----------
 
@@ -81,10 +78,10 @@
   let longPressTimer: ReturnType<typeof setTimeout> | undefined;
 
   function pxX(icon: IconCell): number {
-    return PAD + (icon.x ?? 0) * SLOT;
+    return PAD + (packed.get(icon.id)?.x ?? icon.x ?? 0) * SLOT;
   }
   function pxY(icon: IconCell): number {
-    return PAD + (icon.y ?? 0) * SLOT;
+    return PAD + (packed.get(icon.id)?.y ?? icon.y ?? 0) * SLOT;
   }
   function pxW(icon: IconCell): number {
     return icon.size.w * tile + (icon.size.w - 1) * gap;
@@ -93,7 +90,35 @@
     return icon.size.h * tile + (icon.size.h - 1) * gap;
   }
 
-  const canvasW = $derived(FOLDER_COLS * tile + (FOLDER_COLS - 1) * gap + PAD * 2);
+  /** 打开时图标从左上角紧凑排列（显示占位，行优先，无空档） */
+  const packed = $derived.by(() => {
+    const map = new Map<string, { x: number; y: number }>();
+    if (!folder) return map;
+    let cx = 0, cy = 0, rowH = 0;
+    for (const icon of folder.items) {
+      const w = icon.size.w;
+      const h = icon.size.h;
+      if (cx + w > FOLDER_COLS) {
+        cx = 0;
+        cy += rowH;
+        rowH = 0;
+      }
+      map.set(icon.id, { x: cx, y: cy });
+      cx += w;
+      rowH = Math.max(rowH, h);
+    }
+    return map;
+  });
+  /** 画布宽度贴合打包内容（图标从视图左上角开始，不居中偏移） */
+  const packedW = $derived.by(() => {
+    let maxX = 0;
+    for (const icon of folder?.items ?? []) {
+      const p = packed.get(icon.id);
+      if (p) maxX = Math.max(maxX, p.x + icon.size.w);
+    }
+    return maxX;
+  });
+  const canvasW = $derived(packedW * tile + (packedW - 1) * gap + PAD * 2);
   const canvasH = $derived.by(() => {
     let max = 0;
     for (const icon of folder?.items ?? []) {
@@ -140,9 +165,13 @@
   function onPointerMove(e: PointerEvent): void {
     if (dragging) {
       e.preventDefault();
-      dragDx = e.clientX - dragStartPointerX;
-      dragDy = e.clientY - dragStartPointerY;
       updateTarget(e.clientX, e.clientY);
+      // 幽灵图标吸附到落点
+      if (dragSlot && draggingId) {
+        const ic = folder?.items.find((i) => i.id === draggingId);
+        dragDx = (dragSlot.x - (ic?.x ?? 0)) * SLOT;
+        dragDy = (dragSlot.y - (ic?.y ?? 0)) * SLOT;
+      }
       return;
     }
     if (pointerId === null || pointerId !== e.pointerId || !dragCandidate) return;
@@ -178,12 +207,18 @@
     if (dragging) endDrag();
   }
 
-  function onClickCapture(e: MouseEvent): void {
+  /** 点击处理：拖拽后的点击忽略；点空白（非图标/非按钮）→ 返回上一层 */
+  function onGridClick(e: MouseEvent): void {
     if (suppressClick) {
       e.preventDefault();
       e.stopPropagation();
       suppressClick = false;
+      return;
     }
+    if (ui.editMode) return; // 编辑模式点空白不关闭（避免误触）
+    const t = e.target as HTMLElement;
+    if (t.closest("[data-cell-id]") || t.closest("button")) return;
+    openFolder.folderId = null;
   }
 
   function beginDrag(id: string): void {
@@ -232,10 +267,12 @@
     const icon = folder?.items.find((i) => i.id === draggingId);
     const w = icon?.size.w ?? 1;
     const h = icon?.size.h ?? 1;
-    const rect = canvasEl.getBoundingClientRect();
     const slot = SLOT;
-    const tx = Math.round((x - rect.left - PAD - (w * slot) / 2) / slot);
-    const ty = Math.round((y - rect.top - PAD - (h * slot) / 2) / slot);
+    // 增量式：落点 = 原始格位 + 拖动格数（抓取位置不影响，边缘也能精确放第一格）
+    const dx = x - dragStartPointerX;
+    const dy = y - dragStartPointerY;
+    const tx = (icon?.x ?? 0) + Math.round(dx / slot);
+    const ty = (icon?.y ?? 0) + Math.round(dy / slot);
     dragSlot = {
       x: Math.max(0, Math.min(FOLDER_COLS - w, tx)),
       y: Math.max(0, ty),
@@ -268,7 +305,7 @@
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
     onpointercancel={onPointerCancel}
-    onclick={onClickCapture}
+    onclick={onGridClick}
     onkeydown={(e) => {
       if (e.key === "Escape") endDrag();
     }}
@@ -370,7 +407,6 @@
   }
   .canvas {
     position: relative;
-    margin: 0 auto;
   }
   .cell-wrap {
     position: absolute;

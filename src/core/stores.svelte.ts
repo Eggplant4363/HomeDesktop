@@ -49,8 +49,8 @@ export function setLayout(next: Layout): void {
 
 /** 在页面空闲处放置新单元（自由摆放：自动找首个空位；当前页放不下 → 自动放到下一页，直到新建页）；返回实际放置的页码 */
 export function addCell(cell: Cell, page = currentPage.index): number {
-  const w = cell.kind === "folder" ? 1 : cell.size.w;
-  const h = cell.kind === "folder" ? 1 : cell.size.h;
+  const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
+  const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
   for (let p = page; ; p++) {
     if (!layout.pages[p]) layout.pages[p] = [];
     const cells = layout.pages[p];
@@ -74,8 +74,8 @@ function fitPass(
   let changed = false;
   let moved = 0;
   for (const cell of arr) {
-    const w = cell.kind === "folder" ? 1 : cell.size.w;
-    const h = cell.kind === "folder" ? 1 : cell.size.h;
+    const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
+    const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
     const x = cell.x ?? 0;
     const y = cell.y ?? 0;
     const rect = { x, y, w, h };
@@ -98,18 +98,18 @@ function fitPass(
 /** 确定性重排（大块优先、行优先）：结果只取决于单元集合，必然收敛（防止振荡死循环） */
 function repackDeterministic(arr: Cell[], cols: number, rows: number | undefined): void {
   const ordered = [...arr].sort((a, b) => {
-    const ha = a.kind === "folder" ? 1 : a.size.h;
-    const hb = b.kind === "folder" ? 1 : b.size.h;
+    const ha = a.kind === "folder" ? (a.size?.h ?? 1) : a.size.h;
+    const hb = b.kind === "folder" ? (b.size?.h ?? 1) : b.size.h;
     if (hb !== ha) return hb - ha;
-    const wa = a.kind === "folder" ? 1 : a.size.w;
-    const wb = b.kind === "folder" ? 1 : b.size.w;
+    const wa = a.kind === "folder" ? (a.size?.w ?? 1) : a.size.w;
+    const wb = b.kind === "folder" ? (b.size?.w ?? 1) : b.size.w;
     if (wb !== wa) return wb - wa;
     return (a.id ?? "").localeCompare(b.id ?? "");
   });
   const placed: { x: number; y: number; w: number; h: number }[] = [];
   for (const cell of ordered) {
-    const w = cell.kind === "folder" ? 1 : cell.size.w;
-    const h = cell.kind === "folder" ? 1 : cell.size.h;
+    const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
+    const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
     const slot = findFreeSlot(placed, cols, w, h, rows);
     cell.x = slot.x;
     cell.y = slot.y;
@@ -126,13 +126,13 @@ function paginateOverflow(
 ): number {
   if (!rows) return 0;
   const overflow = arr.filter(
-    (c) => (c.y ?? 0) + (c.kind === "folder" ? 1 : c.size.h) > rows,
+    (c) => (c.y ?? 0) + (c.kind === "folder" ? (c.size?.h ?? 1) : c.size.h) > rows,
   );
   if (overflow.length === 0) return 0;
   overflow.sort(
     (a, b) =>
       (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0) ||
-      (a.kind === "folder" ? 1 : a.size.w) - (b.kind === "folder" ? 1 : b.size.w),
+      (a.kind === "folder" ? (a.size?.w ?? 1) : a.size.w) - (b.kind === "folder" ? (b.size?.w ?? 1) : b.size.w),
   );
   for (const c of overflow) {
     const i = arr.indexOf(c);
@@ -140,8 +140,8 @@ function paginateOverflow(
   }
   let p = page + 1;
   for (const c of overflow) {
-    const w = c.kind === "folder" ? 1 : c.size.w;
-    const h = c.kind === "folder" ? 1 : c.size.h;
+    const w = c.kind === "folder" ? (c.size?.w ?? 1) : c.size.w;
+    const h = c.kind === "folder" ? (c.size?.h ?? 1) : c.size.h;
     for (;;) {
       if (!layout.pages[p]) layout.pages[p] = [];
       const slot = findFreeSlot(layout.pages[p].map(cellRect), cols, w, h, rows);
@@ -216,8 +216,8 @@ export function setCellPosition(
   if (fromPage < 0) return false;
 
   const moving = layout.pages[fromPage][fromIndex];
-  const movingW = moving.kind === "icon" ? moving.size.w : 1;
-  const movingH = moving.kind === "icon" ? moving.size.h : 1;
+  const movingW = moving.kind === "icon" ? moving.size.w : (moving.size?.w ?? 1);
+  const movingH = moving.kind === "icon" ? moving.size.h : (moving.size?.h ?? 1);
   const movingRect = { x: sx, y: sy, w: movingW, h: movingH };
 
   // 目标槽与其他单元重叠 → 交换位置（不自动重排）
@@ -265,6 +265,32 @@ export function setIconPosition(folderId: string, iconId: string, x: number, y: 
     icon.y = sy;
   }
   return true;
+}
+
+/** 打开文件夹时：内部图标从左上角紧凑排列（显示/拖拽一致）。返回是否发生变动 */
+export function repackFolder(folderId: string): boolean {
+  const found = findFolder(folderId);
+  if (!found) return false;
+  const items = found.folder.items;
+  let cx = 0, cy = 0, rowH = 0;
+  let dirty = false;
+  for (const icon of items) {
+    const w = icon.size.w;
+    const h = icon.size.h;
+    if (cx + w > FOLDER_COLS) {
+      cx = 0;
+      cy += rowH;
+      rowH = 0;
+    }
+    if ((icon.x ?? 0) !== cx || (icon.y ?? 0) !== cy) {
+      icon.x = cx;
+      icon.y = cy;
+      dirty = true;
+    }
+    cx += w;
+    rowH = Math.max(rowH, h);
+  }
+  return dirty;
 }
 
 /** 找到文件夹单元格（含所在页） */
@@ -394,7 +420,8 @@ export function moveIconToFolder(iconId: string, folderId: string): boolean {
   return false;
 }
 
-/** 自定义图标外观（M9）：重命名 / 换 emoji / 换颜色 / 借用系统应用图标（传 undefined 不改，传空字符串=清除） */
+/** 自定义图标外观（M9）：重命名 / 换 emoji / 换颜色 / 借用系统应用图标 / 是否显示名称
+ *  （传 undefined 不改，传空字符串=清除） */
 export function updateIconAppearance(
   cellId: string,
   patch: {
@@ -402,6 +429,7 @@ export function updateIconAppearance(
     emoji?: string;
     color?: string;
     iconPath?: string;
+    showLabel?: boolean;
   },
 ): boolean {
   const apply = (icon: IconCell): void => {
@@ -409,6 +437,7 @@ export function updateIconAppearance(
     if (patch.emoji !== undefined) icon.emoji = patch.emoji ? patch.emoji : undefined;
     if (patch.color !== undefined) icon.color = patch.color ? patch.color : undefined;
     if (patch.iconPath !== undefined) icon.iconPath = patch.iconPath ? patch.iconPath : undefined;
+    if (patch.showLabel !== undefined) icon.showLabel = patch.showLabel;
   };
   for (const page of layout.pages) {
     for (const cell of page) {
@@ -428,10 +457,13 @@ export function updateIconAppearance(
   return false;
 }
 
-/** 原位替换图标为应用（系统应用插件槽位）：保持原位置与 id，改标题/动作/插件归属 */
+/** 原位替换图标为应用/文件/文件夹（系统应用插件槽位）：保持原位置与 id，改标题/动作/插件归属
+ *  emoji：文件夹图标用 emoji（📁）；iconPath：文件/应用用真实系统图标（app_icon 提取） */
 export function replaceCellWithApp(
   cellId: string,
   app: { name: string; path: string },
+  emoji?: string,
+  iconPath?: string,
 ): boolean {
   for (const page of layout.pages) {
     for (const cell of page) {
@@ -439,6 +471,8 @@ export function replaceCellWithApp(
         cell.pluginId = "builtin.app";
         cell.title = app.name;
         cell.action = { kind: "app", path: app.path };
+        cell.emoji = emoji;
+        cell.iconPath = iconPath;
         return true;
       }
       if (cell.kind === "folder") {
@@ -447,6 +481,8 @@ export function replaceCellWithApp(
           icon.pluginId = "builtin.app";
           icon.title = app.name;
           icon.action = { kind: "app", path: app.path };
+          icon.emoji = emoji;
+          icon.iconPath = iconPath;
           return true;
         }
       }
@@ -492,6 +528,10 @@ export function setCellSize(
   const arr = layout.pages[page];
   const cell = arr?.find((c) => c.id === id);
   if (cell && cell.kind === "icon") {
+    cell.size = { w, h };
+    return true;
+  }
+  if (cell && cell.kind === "folder") {
     cell.size = { w, h };
     return true;
   }

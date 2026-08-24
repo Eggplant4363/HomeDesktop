@@ -198,6 +198,11 @@ pub struct Size {
     pub h: u32,
 }
 
+/// 1×1 默认尺寸（文件夹未保存尺寸时回退）
+fn size_one() -> Size {
+    Size { w: 1, h: 1 }
+}
+
 /// 文件夹内的图标条目
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -216,6 +221,9 @@ pub struct IconItem {
     pub color: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon_path: Option<String>,
+    /// 是否显示名称（缺省=显示；false=只显示图标）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub show_label: Option<bool>,
     /// 自由摆放（v3）：文件夹内网格坐标（缺省由迁移分配）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub x: Option<u16>,
@@ -243,6 +251,9 @@ pub enum Cell {
         color: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         icon_path: Option<String>,
+        /// 是否显示名称（缺省=显示；false=只显示图标）
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        show_label: Option<bool>,
         /// 自由摆放（v3）：页面网格坐标（缺省由迁移分配）
         #[serde(default, skip_serializing_if = "Option::is_none")]
         x: Option<u16>,
@@ -255,6 +266,9 @@ pub enum Cell {
         name: String,
         emoji: String,
         items: Vec<IconItem>,
+        /// 文件夹尺寸（可调大；缺省 1×1，旧布局兼容）
+        #[serde(default = "size_one")]
+        size: Size,
         /// 自由摆放（v3）：页面网格坐标（缺省由迁移分配；文件夹占 1×1）
         #[serde(default, skip_serializing_if = "Option::is_none")]
         x: Option<u16>,
@@ -855,6 +869,7 @@ mod tests {
                     emoji: None,
                     color: None,
                     icon_path: None,
+                    show_label: None,
                     x: Some(0),
                     y: Some(0),
                 },
@@ -871,9 +886,11 @@ mod tests {
                         emoji: None,
                         color: None,
                         icon_path: None,
+                        show_label: None,
                         x: Some(0),
                         y: Some(0),
                     }],
+                    size: Size { w: 2, h: 2 },
                     x: Some(1),
                     y: Some(0),
                 },
@@ -968,6 +985,7 @@ mod tests {
             emoji: None,
             color: None,
             icon_path: None,
+                    show_label: None,
                     x: None,
                     y: None,
         };
@@ -989,6 +1007,7 @@ mod tests {
             emoji: None,
             color: None,
             icon_path: None,
+                    show_label: None,
                     x: None,
                     y: None,
         };
@@ -1006,6 +1025,7 @@ mod tests {
             emoji: Some("🎮".into()),
             color: Some("#e53935".into()),
             icon_path: Some("C:\\game.exe".into()),
+            show_label: Some(false),
             x: None,
             y: None,
         };
@@ -1013,6 +1033,7 @@ mod tests {
         assert_eq!(json["emoji"], "🎮");
         assert_eq!(json["color"], "#e53935");
         assert_eq!(json["iconPath"], "C:\\game.exe");
+        assert_eq!(json["showLabel"], false);
         let back: Cell = serde_json::from_value(json).unwrap();
         assert_eq!(back, custom, "自定义字段序列化往返一致");
 
@@ -1021,6 +1042,7 @@ mod tests {
             name: "F".into(),
             emoji: "📁".into(),
             items: vec![],
+            size: Size { w: 2, h: 2 },
             x: None,
             y: None,
         };

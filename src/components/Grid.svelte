@@ -149,11 +149,11 @@
     return PAD + effY(cell) * SLOT;
   }
   function pxW(cell: Cell): number {
-    const w = cell.kind === "folder" ? 1 : cell.size.w;
+    const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
     return w * tile + (w - 1) * gap;
   }
   function pxH(cell: Cell): number {
-    const h = cell.kind === "folder" ? 1 : cell.size.h;
+    const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
     return h * tile + (h - 1) * gap;
   }
 
@@ -348,8 +348,8 @@
     dragging = true;
     draggingId = id;
     const cell = cellById(id);
-    const w = cell?.kind === "folder" ? 1 : cell?.size.w ?? 1;
-    const h = cell?.kind === "folder" ? 1 : cell?.size.h ?? 1;
+    const w = cell?.kind === "folder" ? (cell?.size?.w ?? 1) : cell?.size.w ?? 1;
+    const h = cell?.kind === "folder" ? (cell?.size?.h ?? 1) : cell?.size.h ?? 1;
     dragSlot = { x: cell?.x ?? 0, y: cell?.y ?? 0, w, h };
     overFolderId = null;
     dragStartPointerX = startX;
@@ -389,8 +389,8 @@
   function updateTarget(x: number, y: number): void {
     if (!canvasEl || !draggingId) return;
     const cell = cellById(draggingId);
-    const w = cell?.kind === "folder" ? 1 : cell?.size.w ?? 1;
-    const h = cell?.kind === "folder" ? 1 : cell?.size.h ?? 1;
+    const w = cell?.kind === "folder" ? (cell?.size?.w ?? 1) : cell?.size.w ?? 1;
+    const h = cell?.kind === "folder" ? (cell?.size?.h ?? 1) : cell?.size.h ?? 1;
     const slot = SLOT;
     const dx = x - dragStartPointerX;
     const dy = y - dragStartPointerY;
@@ -501,6 +501,9 @@
             onopen={() => !ui.editMode && onopenfolder?.(cell.id)}
             onedit={() => oneditfolder?.(cell.id)}
             ondelete={() => ondelete?.(cell.id)}
+            onresize={() => onresize?.(cell.id)}
+            onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
+            onresizeend={onresizeend ? (id) => onresizeend?.(id) : undefined}
           />
         </div>
       {:else if isWidgetCell(cell)}
@@ -516,6 +519,7 @@
             editMode={ui.editMode}
             ondelete={() => ondelete?.(cell.id)}
             onmove={() => onmoveicon?.(cell.id)}
+            onedit={() => onediticon?.(cell.id)}
                         onresize={() => onresize?.(cell.id)}
             onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
             onresizeend={onresizeend ? (id) => onresizeend?.(id) : undefined}

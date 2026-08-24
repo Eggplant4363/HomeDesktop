@@ -6,6 +6,8 @@ import { setPlugins } from "./stores.svelte";
 export interface AppInfo {
   name: string;
   path: string;
+  /** 借用/文件图标：用 app_icon 提取该路径的真实图标（文件/文件夹类型图标） */
+  iconPath?: string;
 }
 
 export async function loadPlugins(): Promise<void> {

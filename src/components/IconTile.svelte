@@ -3,7 +3,7 @@
   import FaviconIcon from "./FaviconIcon.svelte";
   import type { IconCell, PluginInfo } from "../core/types";
   import { appearance } from "../core/appearance.svelte";
-  import { iconGlyphSize } from "../core/iconStandard";
+  import { iconGlyphSize, iconEmojiFontSize, iconRadius } from "../core/iconStandard";
 
   let {
     item,
@@ -85,19 +85,20 @@
   /** 图标尺寸随网格等比缩放（占格子约 50%，给标签留空间） */
   // 图标留出文字空间：icon+文字 完整居中放进格子，上下位置一致
   const iconSize = $derived(iconGlyphSize(appearance.tileSize));
-  const iconRadius = $derived(Math.round(iconSize * 0.27));
+  const iconR = $derived(iconRadius(appearance.tileSize));
   /** emoji/彩色图标的行内样式 */
   const iconStyle = $derived.by(() => {
-    const fs = Math.round(iconSize * 0.55);
+    const fs = iconEmojiFontSize(appearance.tileSize);
     const parts = [`font-size:${fs}px`];
     if (item.color) {
-      parts.push(`background:${item.color}`, `width:${iconSize}px`, `height:${iconSize}px`, `border-radius:14px`);
+      parts.push(`background:${item.color}`, `width:${iconSize}px`, `height:${iconSize}px`, `border-radius:${iconR}px`);
     }
     return parts.join(";");
   });
 
-  /** 应用抽屉图标：无插件但有自带动作 → 显示系统真实图标（AppIcon 内回退头像） */
-  const isAppIcon = $derived(!plugin && !!item.action);
+  /** 应用抽屉图标：无插件但有自带动作 → 显示系统真实图标（AppIcon 内回退头像）
+   *  带自定义 emoji 的文件/文件夹图标（📄/📁）不在此列，走 emoji 显示 */
+  const isAppIcon = $derived(!plugin && !!item.action && !item.emoji);
   /** 显示用的 emoji：自定义 > 插件 emoji > 📦 */
   const displayEmoji = $derived(item.emoji ?? plugin?.emoji ?? "📦");
   /** 网页快捷方式：插件含 url 设置项 → 显示网站 favicon */
@@ -180,13 +181,13 @@
   {/if}
   {#if item.iconPath}
     <!-- 借用系统应用图标（M9） -->
-    <AppIcon path={item.iconPath} name={item.title} size={iconSize} radius={iconRadius} />
+    <AppIcon path={item.iconPath} name={item.title} size={iconSize} radius={iconR} />
   {:else if isAppIcon}
     <AppIcon
       path={item.action?.kind === "app" ? item.action.path : ""}
       name={item.title}
       size={iconSize}
-      radius={iconRadius}
+      radius={iconR}
     />
   {:else if isWebIcon}
     <!-- 网页快捷方式：显示网站 favicon（兜底链见 FaviconIcon） -->
@@ -203,7 +204,9 @@
       style={iconStyle}
     >{displayEmoji}</div>
   {/if}
-  <div class="label">{item.title}</div>
+  {#if item.showLabel !== false}
+    <div class="label">{item.title}</div>
+  {/if}
 </div>
 
 <style>
