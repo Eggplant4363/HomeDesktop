@@ -10,6 +10,7 @@
     ondelete,
     onmove,
     onresize,
+    onedit,
     onsettings,
     onresizeto,
     onresizeend,
@@ -20,6 +21,7 @@
     ondelete?: (id: string) => void;
     onmove?: (id: string) => void;
     onresize?: (id: string) => void;
+    onedit?: (id: string) => void;
     onsettings?: (id: string) => void;
     /** 拖动右下角手柄自由调整尺寸（0.5 格步进） */
     onresizeto?: (id: string, w: number, h: number) => void;
@@ -96,7 +98,7 @@
       onpointercancel={endResize}
     >⤡</div>
   {/if}
-  {#if editMode && (ondelete || onresize || onsettings || onmove)}
+  {#if editMode && (ondelete || onresize || onsettings || onmove || onedit)}
     <div class="actions">
       {#if onresize}
         <button
@@ -117,6 +119,16 @@
             onmove?.(item.id);
           }}
         >📁</button>
+      {/if}
+      {#if onedit && plugin?.widgetComponent === "homeassistant"}
+        <button
+          class="act edit"
+          title="自定义（名称/图标/颜色）"
+          onclick={(e) => {
+            e.stopPropagation();
+            onedit?.(item.id);
+          }}
+        >📝</button>
       {/if}
       {#if onsettings && plugin?.settings?.length}
         <button
@@ -246,6 +258,9 @@
   }
   .act.move {
     background: var(--accent);
+  }
+  .act.edit {
+    background: var(--fg-dim);
   }
   .act.settings {
     background: var(--fg-dim);

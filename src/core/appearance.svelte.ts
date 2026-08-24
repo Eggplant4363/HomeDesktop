@@ -69,7 +69,7 @@ export async function loadAppearance(): Promise<void> {
     if (typeof r.tileSize === "number" && r.tileSize >= 40 && r.tileSize <= 120) {
       appearance.tileSize = r.tileSize;
     }
-    if (typeof r.gridSpacing === "number" && r.gridSpacing >= 0 && r.gridSpacing <= 20) {
+    if (typeof r.gridSpacing === "number" && r.gridSpacing >= 0 && r.gridSpacing <= 30) {
       appearance.gridSpacing = r.gridSpacing;
     }
     if (r.theme === "dark" || r.theme === "light") {

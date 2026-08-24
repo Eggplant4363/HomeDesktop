@@ -187,17 +187,22 @@ fn resolve_placeholders(
 }
 
 /// 获取网页标题（网页快捷方式：图标标签自动显示站点标题）。失败/无标题返回 None。
+/// async + spawn_blocking：避免同步阻塞 Tauri 主线程导致 UI 卡住。
 #[tauri::command]
-pub fn web_fetch_title(url: String) -> Result<Option<String>, String> {
-    let resp = fetch_agent()
-        .get(&url)
-        .set("User-Agent", FETCH_UA)
-        .timeout(std::time::Duration::from_secs(8))
-        .call()
-        .map_err(|e| format!("请求失败: {e}"))?;
-    let mut body = resp.into_string().map_err(|e| e.to_string())?;
-    truncate_utf8(&mut body, 512 * 1024); // 只解析前 512KB（字符边界安全截断）
-    Ok(extract_html_title(&body))
+pub async fn web_fetch_title(url: String) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let resp = fetch_agent()
+            .get(&url)
+            .set("User-Agent", FETCH_UA)
+            .timeout(std::time::Duration::from_secs(8))
+            .call()
+            .map_err(|e| format!("请求失败: {e}"))?;
+        let mut body = resp.into_string().map_err(|e| e.to_string())?;
+        truncate_utf8(&mut body, 512 * 1024); // 只解析前 512KB（字符边界安全截断）
+        Ok(extract_html_title(&body))
+    })
+    .await
+    .map_err(|e| format!("线程错误: {e}"))?
 }
 
 /// 按字节上限截断字符串（保证不落在 UTF-8 字符中间，避免 truncate panic）
@@ -236,8 +241,10 @@ fn extract_html_title(html: &str) -> Option<String> {
 /// 的图标必须在 Rust 侧免校验抓取后转 data: 才能显示）。
 /// **磁盘缓存**：按网址哈希存 `icons/web/<hash>.txt`，抓一次永久生效（不再每次联网）。
 /// 失败返回 None → 前端回退 emoji。
+/// async + spawn_blocking：避免同步阻塞 Tauri 主线程导致 UI 卡住。
 #[tauri::command]
-pub fn web_fetch_icon(app: AppHandle, url: String) -> Result<Option<String>, String> {
+pub async fn web_fetch_icon(app: AppHandle, url: String) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
     use std::io::Read;
     // 上限 4MB（部分站点声明的图标是大图，如 cchong.cc 2.4MB）
     const MAX_ICON: usize = 4 * 1024 * 1024;
@@ -321,6 +328,9 @@ pub fn web_fetch_icon(app: AppHandle, url: String) -> Result<Option<String>, Str
         let _ = std::fs::write(&cache, &data_url);
     }
     Ok(Some(data_url))
+    })
+    .await
+    .map_err(|e| format!("线程错误: {e}"))?
 }
 
 /// 网站图标磁盘缓存路径（icons/web/<url hash>.txt）

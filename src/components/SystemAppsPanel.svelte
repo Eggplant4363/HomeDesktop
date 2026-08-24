@@ -13,7 +13,7 @@
     onclose,
     mode = "add",
   }: {
-    onadd?: (app: AppInfo) => void;
+    onadd?: (app: AppInfo & { emoji?: string; iconPath?: string }) => void;
     onclose?: () => void;
     /** add=系统应用插件槽位替换；borrow=给图标借用系统应用图标（M9） */
     mode?: "add" | "borrow";
@@ -40,9 +40,46 @@
       const base = picked.split(/[\\/]/).pop() ?? "";
       const name = base.replace(/\.exe$/i, "") || "自定义应用";
       log.info(`选择自定义 exe: ${picked}`);
-      onadd?.({ name, path: picked });
+      // iconPath → AppIcon 提取真实图标
+      onadd?.({ name, path: picked, iconPath: picked });
     } catch (e) {
       log.error(`选择自定义 exe 失败: ${e}`);
+    } finally {
+      picking = false;
+    }
+  }
+
+  /** 选择任意文件（文档/图片等）：点击后用系统默认程序打开 */
+  async function pickCustomFile(): Promise<void> {
+    if (picking) return;
+    picking = true;
+    try {
+      const picked = await open({ multiple: false });
+      if (typeof picked !== "string" || !picked) return;
+      const base = picked.split(/[\\/]/).pop() ?? "";
+      const name = base || "文件";
+      log.info(`选择文件: ${picked}`);
+      // iconPath → AppIcon 提取系统文件类型图标（docx/pdf/图片等都有真实图标）
+      onadd?.({ name, path: picked, iconPath: picked });
+    } catch (e) {
+      log.error(`选择文件失败: ${e}`);
+    } finally {
+      picking = false;
+    }
+  }
+
+  /** 选择文件夹：点击后在资源管理器中打开 */
+  async function pickCustomFolder(): Promise<void> {
+    if (picking) return;
+    picking = true;
+    try {
+      const picked = await open({ directory: true, multiple: false });
+      if (typeof picked !== "string" || !picked) return;
+      const name = picked.split(/[\\/]/).pop() || "文件夹";
+      log.info(`选择文件夹: ${picked}`);
+      onadd?.({ name, path: picked, emoji: "📁" });
+    } catch (e) {
+      log.error(`选择文件夹失败: ${e}`);
     } finally {
       picking = false;
     }
@@ -74,9 +111,19 @@
         placeholder="搜索已安装的应用…"
         bind:value={appQuery}
       />
-      <button class="custom-btn" onclick={pickCustomExe} disabled={picking}>
-        📂 选择自定义 exe 位置…（自动获取图标）
-      </button>
+      {#if mode === "add"}
+        <div class="custom-row">
+          <button class="custom-btn" onclick={pickCustomExe} disabled={picking}>
+            📂 选 exe…
+          </button>
+          <button class="custom-btn" onclick={pickCustomFile} disabled={picking}>
+            📄 选文件…
+          </button>
+          <button class="custom-btn" onclick={pickCustomFolder} disabled={picking}>
+            📁 选文件夹…
+          </button>
+        </div>
+      {/if}
     </div>
     <div class="list">
       {#each filteredApps as app (app.name + app.path)}
@@ -142,16 +189,21 @@
   .search input:focus {
     border-color: var(--accent);
   }
-  .custom-btn {
-    width: 100%;
+  .custom-row {
+    display: flex;
+    gap: 8px;
     margin-top: 8px;
+  }
+  .custom-btn {
+    flex: 1;
     border: 1px dashed var(--border);
     border-radius: 10px;
     background: transparent;
     color: var(--fg-dim);
     font-size: 12px;
-    padding: 9px 12px;
+    padding: 9px 6px;
     cursor: pointer;
+    white-space: nowrap;
   }
   .custom-btn:hover:not(:disabled) {
     border-color: var(--accent);
