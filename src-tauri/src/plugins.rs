@@ -115,40 +115,75 @@ pub fn launch_action(app: AppHandle, plugin_id: String) -> Result<(), String> {
     launch_plugin_action(&plugin)
 }
 
-/// 按单元格 id 启动：优先用图标自带动作（应用抽屉），否则回退到插件动作
+/// 按单元格 id 启动：优先用图标自带动作（应用抽屉），否则回退到插件动作。
+/// 覆盖页面顶层图标与**文件夹内图标**（移入文件夹后仍可启动）。
 #[tauri::command]
 pub fn launch_cell(app: AppHandle, cell_id: String) -> Result<(), String> {
     crate::log::info(&format!("launch_cell: {cell_id}"));
-    use homedesktop_core::{execute_action, Cell};
+    use homedesktop_core::{execute_action, ActionSpec, Cell};
     let layout = layout_load(app.clone()).unwrap_or_default();
+
+    /// id 匹配则启动（action 优先，回退插件动作并解析 `{设置键}` 占位符）；不匹配返回 None
+    fn try_launch(
+        app: &AppHandle,
+        id: &str,
+        plugin_id: &str,
+        action: &Option<ActionSpec>,
+        target: &str,
+    ) -> Option<Result<(), String>> {
+        if id != target {
+            return None;
+        }
+        Some(launch_icon(app, plugin_id, action, id))
+    }
+
+    fn launch_icon(
+        app: &AppHandle,
+        plugin_id: &str,
+        action: &Option<ActionSpec>,
+        cell_id: &str,
+    ) -> Result<(), String> {
+        if let Some(action) = action {
+            return execute_action(action);
+        }
+        let plugin = plugins_list(app.clone())
+            .into_iter()
+            .find(|p| &p.id == plugin_id)
+            .ok_or_else(|| format!("plugin not found: {plugin_id}"))?;
+        // 动作支持 `{设置键}` 占位符（如 {url}）：用实例设置替换，缺省回退 manifest 默认值
+        let mut resolved = plugin.clone();
+        if let Some(action) = resolved.actions.first_mut() {
+            if let Some(path) = action.path.as_mut() {
+                *path = resolve_placeholders(app, path, cell_id, &plugin);
+            }
+            if let Some(cmd) = action.cmd.as_mut() {
+                *cmd = resolve_placeholders(app, cmd, cell_id, &plugin);
+            }
+        }
+        launch_plugin_action(&resolved)
+    }
+
     for page in &layout.pages {
         for cell in page {
-            if let Cell::Icon {
-                id,
-                plugin_id,
-                action,
-                ..
-            } = cell
-            {
-                if id == &cell_id {
-                    if let Some(action) = action {
-                        return execute_action(action);
+            match cell {
+                Cell::Icon {
+                    id,
+                    plugin_id,
+                    action,
+                    ..
+                } => {
+                    if let Some(res) = try_launch(&app, id, plugin_id, action, &cell_id) {
+                        return res;
                     }
-                    let plugin = plugins_list(app.clone())
-                        .into_iter()
-                        .find(|p| &p.id == plugin_id)
-                        .ok_or_else(|| format!("plugin not found: {plugin_id}"))?;
-                    // 动作支持 `{设置键}` 占位符（如 {url}）：用实例设置替换，缺省回退 manifest 默认值
-                    let mut resolved = plugin.clone();
-                    if let Some(action) = resolved.actions.first_mut() {
-                        if let Some(path) = action.path.as_mut() {
-                            *path = resolve_placeholders(&app, path, &cell_id, &plugin);
-                        }
-                        if let Some(cmd) = action.cmd.as_mut() {
-                            *cmd = resolve_placeholders(&app, cmd, &cell_id, &plugin);
+                }
+                Cell::Folder { items, .. } => {
+                    for item in items {
+                        if let Some(res) =
+                            try_launch(&app, &item.id, &item.plugin_id, &item.action, &cell_id)
+                        {
+                            return res;
                         }
                     }
-                    return launch_plugin_action(&resolved);
                 }
             }
         }

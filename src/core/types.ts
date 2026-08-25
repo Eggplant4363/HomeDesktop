@@ -96,6 +96,8 @@ export interface IconCell {
   color?: string;
   /** 借用系统应用图标（M9：存系统应用路径，渲染时用 app_icon 取真实图标） */
   iconPath?: string;
+  /** 自定义图片图标（"来自图片"：data URL，渲染时优先于 iconPath） */
+  iconImage?: string;
   /** 是否显示名称（缺省=显示；false=只显示图标不显示文字） */
   showLabel?: boolean;
   /** 自由摆放（v3）：页面/文件夹内网格坐标（缺省由迁移分配） */

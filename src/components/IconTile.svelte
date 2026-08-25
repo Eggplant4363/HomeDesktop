@@ -179,7 +179,15 @@
       onpointercancel={endResize}
     >⤡</div>
   {/if}
-  {#if item.iconPath}
+  {#if item.iconImage}
+    <!-- 自定义图片图标（来自图片） -->
+    <img
+      class="icon-img"
+      src={item.iconImage}
+      alt={item.title}
+      style="width:{iconSize}px;height:{iconSize}px;border-radius:{iconR}px;"
+    />
+  {:else if item.iconPath}
     <!-- 借用系统应用图标（M9） -->
     <AppIcon path={item.iconPath} name={item.title} size={iconSize} radius={iconR} />
   {:else if isAppIcon}
@@ -246,6 +254,10 @@
   }
   .icon {
     line-height: 1;
+  }
+  .icon-img {
+    object-fit: cover;
+    flex-shrink: 0;
   }
   .icon.colored {
     border-radius: 14px;

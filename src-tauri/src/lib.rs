@@ -140,6 +140,7 @@ pub fn run() {
             apps::apps_scan,
             apps::app_icon,
             apps::launch_path,
+            apps::image_to_data_url,
             media::media_now_playing,
             media::media_control,
             ime::ime_save,
