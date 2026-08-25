@@ -12,7 +12,7 @@
   import { installPlugin, loadPlugins, launchCell } from "./core/pluginLoader";
   import type { AppInfo } from "./core/pluginLoader";
   import { loadLayout, saveLayout } from "./core/persistence";
-  import { clearFocusCell, getFocusCell, repackFolder } from "./core/stores.svelte";
+  import { clearFocusCell, getDisplayPageCount, getFocusCell, repackFolder } from "./core/stores.svelte";
   import {
     addCell,
     addIconToFolder,
@@ -125,6 +125,7 @@
   let iconEditEmoji = $state("");
   let iconEditColor = $state("");
   let iconEditIconPath = $state("");
+  let iconEditIconImage = $state("");
   let iconEditShowLabel = $state(true);
   /** 当前编辑的是否为小组件（智能家居等）：弹窗隐藏"借用系统图标"，名称存实例设置 */
   let iconEditIsWidget = $state(false);
@@ -346,7 +347,7 @@
     slideAnimating = true;
     const width = slideWrap?.clientWidth || window.innerWidth;
     const th = Math.max(50, width * 0.18);
-    const dir = dx <= -th && currentPage.index < layout.pages.length - 1
+    const dir = dx <= -th && currentPage.index < totalPages - 1
       ? 1
       : dx >= th && currentPage.index > 0
         ? -1
@@ -762,6 +763,7 @@
     iconEditEmoji = icon.emoji ?? "";
     iconEditColor = icon.color ?? "";
     iconEditIconPath = icon.iconPath ?? "";
+    iconEditIconImage = icon.iconImage ?? "";
     iconEditShowLabel = icon.showLabel !== false;
   }
 
@@ -774,6 +776,7 @@
       emoji: iconEditEmoji,
       color: iconEditColor,
       iconPath: iconEditIconPath,
+      iconImage: iconEditIconImage,
       showLabel: iconEditShowLabel,
     });
     persist();
@@ -787,7 +790,58 @@
   /** 借用系统应用图标（M9）：面板选中后记录其路径，返回编辑弹窗 */
   function handleBorrowIcon(app: AppInfo): void {
     iconEditIconPath = app.path;
+    iconEditIconImage = "";
     showIconBorrow = false;
+  }
+
+  /** 选择图片作为图标：Rust 读文件 → 压缩到 ≤256px → data URL（保存后生效） */
+  async function pickIconImage(): Promise<void> {
+    try {
+      const picked = await open({
+        multiple: false,
+        filters: [
+          { name: "图片", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "ico"] },
+        ],
+      });
+      if (typeof picked !== "string" || !picked) return;
+      const dataUrl = await invoke<string | null>("image_to_data_url", { path: picked });
+      if (!dataUrl) {
+        toast("不支持的图片格式");
+        return;
+      }
+      iconEditIconImage = await downscaleDataUrl(dataUrl, 256);
+      iconEditIconPath = "";
+      toast("已选择图片图标（点保存生效）");
+      log.info(`选择图片图标: ${picked}`);
+    } catch (e) {
+      log.error(`选择图片图标失败: ${e}`);
+      toast(`图片读取失败：${e}`);
+    }
+  }
+
+  /** data URL 图片压缩到 maxSize 边长内（canvas），避免布局文件过大 */
+  function downscaleDataUrl(dataUrl: string, maxSize: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("canvas 不可用");
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/png"));
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = () => reject(new Error("图片解码失败"));
+      img.src = dataUrl;
+    });
   }
 
   function handleResize(iconId: string): void {
@@ -965,12 +1019,15 @@
     }
   }
 
+  /** 总页数：紧凑显示（分辨率变化）时用显示层页数，否则用存储页数 */
+  const totalPages = $derived(getDisplayPageCount() || layout.pages.length);
+
   function handlePrev(): void {
     if (currentPage.index > 0) currentPage.index--;
   }
 
   function handleNext(): void {
-    if (currentPage.index < layout.pages.length - 1) currentPage.index++;
+    if (currentPage.index < totalPages - 1) currentPage.index++;
   }
 
   function handleAddPage(): void {
@@ -984,6 +1041,16 @@
     persist();
     log.info(`删除页面 ${currentPage.index + 1}`);
   }
+
+  // 紧凑显示（分辨率变化）切换时：页索引越界则钳制
+  $effect(() => {
+    const n = getDisplayPageCount();
+    if (n > 0 && currentPage.index >= n) {
+      currentPage.index = n - 1;
+    } else if (n === 0 && currentPage.index >= layout.pages.length) {
+      currentPage.index = Math.max(0, layout.pages.length - 1);
+    }
+  });
 
   /** 弹出通用确认框（所有删除操作统一走这里） */
   function askConfirm(title: string, message: string, onConfirm: () => void): void {
@@ -1383,15 +1450,27 @@
             {/each}
           </div>
         </div>
-        <div class="fe-row">
-          <span class="fe-label">图标</span>
-          <div class="fe-borrow">
-            <button class="fe-btn save" onclick={() => (showIconBorrow = true)}>🎨 借用系统应用图标…</button>
-            {#if iconEditIconPath}
-              <button class="fe-btn cancel" onclick={() => (iconEditIconPath = "")}>清除</button>
-            {/if}
+        {#if !iconEditIsWidget}
+          <div class="fe-row">
+            <span class="fe-label">图标</span>
+            <div class="fe-borrow">
+              <button class="fe-btn save" onclick={() => (showIconBorrow = true)}>🎨 借用系统应用图标…</button>
+              <button class="fe-btn save" onclick={() => void pickIconImage()}>🖼 来自图片…</button>
+              {#if iconEditIconImage}
+                <img class="icon-preview" src={iconEditIconImage} alt="" title="当前图片图标" />
+              {/if}
+              {#if iconEditIconPath || iconEditIconImage}
+                <button
+                  class="fe-btn cancel"
+                  onclick={() => {
+                    iconEditIconPath = "";
+                    iconEditIconImage = "";
+                  }}
+                >清除</button>
+              {/if}
+            </div>
           </div>
-        </div>
+        {/if}
         <div class="fe-actions">
           <button class="fe-btn cancel" onclick={() => (iconEditTarget = null)}>取消</button>
           <button class="fe-btn save" onclick={handleSaveIconEdit}>保存</button>
@@ -1493,6 +1572,7 @@
       >
         <Grid
           cells={query.text ? layout.pages.flat() : layout.pages[currentPage.index] ?? []}
+          pages={layout.pages}
           queryText={query.text}
           highlightId={addedFlashId}
         onlaunch={(id) => handleLaunch(id)}
@@ -1522,11 +1602,11 @@
 
   {#if !inFolder}
     <footer class="pager">
-      {#if layout.pages.length > 1}
+      {#if totalPages > 1}
         <div class="pager-group">
           <button class="icon-btn" onclick={handlePrev} disabled={currentPage.index === 0}>‹</button>
-          <span>{currentPage.index + 1} / {layout.pages.length}</span>
-          <button class="icon-btn" onclick={handleNext} disabled={currentPage.index === layout.pages.length - 1}>›</button>
+          <span>{currentPage.index + 1} / {totalPages}</span>
+          <button class="icon-btn" onclick={handleNext} disabled={currentPage.index === totalPages - 1}>›</button>
           <button
             class="icon-btn page-op"
             title="删除当前页（需要确认）"
@@ -1890,6 +1970,13 @@
   }
   .fe-color.active {
     border-color: var(--accent);
+  }
+  .icon-preview {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    object-fit: cover;
+    flex-shrink: 0;
   }
   .fe-borrow {
     flex: 1;

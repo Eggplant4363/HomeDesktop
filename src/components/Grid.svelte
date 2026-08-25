@@ -4,7 +4,7 @@
   import FolderTile from "./FolderTile.svelte";
   import WidgetTile from "./WidgetTile.svelte";
   import type { Cell, IconCell, PluginInfo } from "../core/types";
-  import { currentPage, enterEditMode, fitCellsToCols, plugins, ui } from "../core/stores.svelte";
+  import { currentPage, enterEditMode, plugins, setDisplayPageCount, ui } from "../core/stores.svelte";
   import { appearance } from "../core/appearance.svelte";
   import { filterCells } from "../core/search";
   import { PAGE_COLS, setActivePageCols, setActivePageRows } from "../core/layout";
@@ -12,6 +12,8 @@
 
   let {
     cells,
+    /** 全部页面（紧凑重排时跨页按原顺序分页显示用） */
+    pages,
     queryText = "",
     onlaunch,
     ondelete,
@@ -38,6 +40,7 @@
     onswipeend,
   }: {
     cells: Cell[];
+    pages: Cell[][];
     queryText?: string;
     onlaunch?: (pluginId: string) => void;
     ondelete?: (id: string) => void;
@@ -117,22 +120,89 @@
     return id ? cells.find((c) => c.id === id) : undefined;
   }
 
-  const visible = $derived(filterCells(cells, plugins, queryText));
+  /** 窗口放不下（分辨率/窗口变小，任一页图标越界）：需要显示层紧凑重排 */
+  const needsPacked = $derived.by(() => {
+    if (queryText) return false;
+    for (const pg of pages) {
+      for (const cell of pg) {
+        const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
+        const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
+        if ((cell.x ?? 0) + w > cols) return true;
+        if ((cell.y ?? 0) + h > maxRows) return true;
+      }
+    }
+    return false;
+  });
 
-  /** 搜索模式：命中 cell 从左上角紧凑依次排列（不改变存储坐标，仅显示用） */
-  const packed = $derived.by(() => {
+  /** 紧凑重排（仅显示层，不修改存储坐标）——**每页独立、页内滚动、不跨页**：
+   *  每个存储页的图标按原顺序（行 → 列）在当前列数下逐行填充到**本页自己的显示页**；
+   *  本页放不下 → 页面纵向滚动查看（**页1的图标永远在页1**，不会散到第2/3/4页）；
+   *  页数保持与存储页一致（不产生"差别大"的额外页）；
+   *  分辨率恢复后自动还原存储布局 */
+  const packedPages = $derived.by(() => {
+    const out: { page: number; x: number; y: number; cell: Cell }[] = [];
+    if (!needsPacked) return out;
+    for (let pi = 0; pi < pages.length; pi++) {
+      const pg = pages[pi];
+      if (pg.length === 0) continue;
+      const ordered = [...pg].sort((a, b) => {
+        const ay = a.y ?? 0, by = b.y ?? 0;
+        const ax = a.x ?? 0, bx = b.x ?? 0;
+        return ay - by || ax - bx || a.id.localeCompare(b.id);
+      });
+      let cx = 0, cy = 0, rowH = 0;
+      for (const cell of ordered) {
+        const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
+        const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
+        if (cx + w > Math.max(1, cols)) { cx = 0; cy += rowH; rowH = 0; }
+        // 不跨页：超出视口行数时继续往下放，画布变高由纵向滚动查看
+        out.push({ page: pi, x: cx, y: cy, cell });
+        cx += w;
+        rowH = Math.max(rowH, h);
+      }
+    }
+    return out;
+  });
+  /** 紧凑显示页数 = 存储页数（不产生额外页） */
+  const packedCount = $derived(pages.length || 1);
+  /** 当前显示页（=存储页序号） */
+  const dispPage = $derived(needsPacked ? Math.min(currentPage.index, packedCount - 1) : currentPage.index);
+  /** 紧凑位置表（全部显示页） */
+  const packedPos = $derived.by(() => {
     const map = new Map<string, { x: number; y: number }>();
-    if (!queryText) return map;
+    for (const p of packedPages) map.set(p.cell.id, { x: p.x, y: p.y });
+    return map;
+  });
+
+  /** 渲染单元：搜索=命中集；紧凑模式=当前显示页；否则=存储页 */
+  const visible = $derived.by(() => {
+    if (queryText) return filterCells(cells, plugins, queryText);
+    if (needsPacked) return packedPages.filter((p) => p.page === dispPage).map((p) => p.cell);
+    return cells;
+  });
+
+  /** 紧凑占位（显示用）：搜索命中集 / 紧凑重排结果 */
+  const packed = $derived.by(() => {
+    if (!queryText && !needsPacked) return new Map<string, { x: number; y: number }>();
+    if (needsPacked) return packedPos;
+    const map = new Map<string, { x: number; y: number }>();
     let cx = 0, cy = 0, rowH = 0;
     for (const cell of visible) {
-      const w = cell.kind === "folder" ? 1 : cell.size.w;
-      const h = cell.kind === "folder" ? 1 : cell.size.h;
+      const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
+      const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
       if (cx + w > Math.max(1, cols)) { cx = 0; cy += rowH; rowH = 0; }
       map.set(cell.id, { x: cx, y: cy });
       cx += w;
       rowH = Math.max(rowH, h);
     }
     return map;
+  });
+
+  // 紧凑模式：把显示页数同步给外层（翻页/分页指示器用）；0=恢复用存储页数
+  $effect(() => {
+    void needsPacked;
+    void packedCount;
+    setDisplayPageCount(needsPacked ? packedCount : 0);
   });
 
   /** 单元像素几何（画布内）——搜索时用紧凑占位，否则用存储坐标 */
@@ -160,10 +230,11 @@
   const canvasW = $derived(cols * tile + (cols - 1) * gap + PAD * 2);
   const canvasH = $derived.by(() => {
     let max = 0;
-    for (const cell of cells) {
+    for (const cell of visible) {
       if (cell.id === draggingId) continue;
-      const bottom = (cell.y ?? 0) + (cell.kind === "folder" ? 1 : cell.size.h);
-      max = Math.max(max, bottom * SLOT);
+      const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
+      const top = packed.get(cell.id)?.y ?? cell.y ?? 0;
+      max = Math.max(max, (top + h) * SLOT);
     }
     return max + PAD + 10;
   });
@@ -198,13 +269,8 @@
     return () => window.removeEventListener("resize", onResize);
   });
 
-  // 列数/行数/单元变化时：把越界或重叠的单元移到画布内空位（不重排正常单元）
-  $effect(() => {
-    void cells;
-    if (cols > 0 && cells.length > 0) {
-      if (fitCellsToCols(currentPage.index, cols, maxRows)) onfitted?.();
-    }
-  });
+  // 注意：分辨率/窗口变化时**不**重排、不持久化（避免永久打乱顺序）。
+  // 越界单元由 needsPacked 显示层紧凑排列兜底，分辨率恢复后自动还原存储布局。
 
   function onPointerDown(e: PointerEvent): void {
     if ((e.target as HTMLElement).closest("button")) return; // 忽略操作按钮
@@ -345,6 +411,7 @@
 
   function beginDrag(id: string): void {
     if (dragging) return;
+    if (needsPacked) return; // 紧凑显示模式（分辨率变化）下禁用拖拽，避免显示位与存储位错位
     dragging = true;
     draggingId = id;
     const cell = cellById(id);
@@ -566,7 +633,7 @@
   .grid {
     position: relative;
     height: 100%;
-    overflow-y: hidden; /* 内容放不下时由 fitCellsToCols 自动移到下一页，绝不出现纵向滚动条 */
+    overflow-y: auto; /* 正常布局不超高无滚动条；分辨率变小紧凑显示超高时可滚动查看（不自动分页） */
     overflow-x: auto; /* 极端窄窗口兜底：允许横向滚动查看 */
     touch-action: pan-y; /* 触屏：纵向滚动交给浏览器，长按/横向由应用处理 */
     /* 容器 tabindex=-1 可被点击聚焦；按键后 Chromium 会画默认黑色 focus ring → 禁用 */

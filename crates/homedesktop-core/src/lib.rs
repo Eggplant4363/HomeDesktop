@@ -221,6 +221,9 @@ pub struct IconItem {
     pub color: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon_path: Option<String>,
+    /// 自定义图片图标（"来自图片"，data URL；渲染时优先于 icon_path）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon_image: Option<String>,
     /// 是否显示名称（缺省=显示；false=只显示图标）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub show_label: Option<bool>,
@@ -251,6 +254,9 @@ pub enum Cell {
         color: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         icon_path: Option<String>,
+        /// 自定义图片图标（"来自图片"，data URL；渲染时优先于 icon_path）
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        icon_image: Option<String>,
         /// 是否显示名称（缺省=显示；false=只显示图标）
         #[serde(default, skip_serializing_if = "Option::is_none")]
         show_label: Option<bool>,
@@ -869,7 +875,8 @@ mod tests {
                     emoji: None,
                     color: None,
                     icon_path: None,
-                    show_label: None,
+                    icon_image: None,
+            show_label: None,
                     x: Some(0),
                     y: Some(0),
                 },
@@ -886,7 +893,8 @@ mod tests {
                         emoji: None,
                         color: None,
                         icon_path: None,
-                        show_label: None,
+                        icon_image: None,
+            show_label: None,
                         x: Some(0),
                         y: Some(0),
                     }],
@@ -985,7 +993,8 @@ mod tests {
             emoji: None,
             color: None,
             icon_path: None,
-                    show_label: None,
+                    icon_image: None,
+            show_label: None,
                     x: None,
                     y: None,
         };
@@ -1007,7 +1016,8 @@ mod tests {
             emoji: None,
             color: None,
             icon_path: None,
-                    show_label: None,
+                    icon_image: None,
+            show_label: None,
                     x: None,
                     y: None,
         };
@@ -1025,6 +1035,7 @@ mod tests {
             emoji: Some("🎮".into()),
             color: Some("#e53935".into()),
             icon_path: Some("C:\\game.exe".into()),
+            icon_image: Some("data:image/png;base64,AAAA".into()),
             show_label: Some(false),
             x: None,
             y: None,
@@ -1034,6 +1045,7 @@ mod tests {
         assert_eq!(json["color"], "#e53935");
         assert_eq!(json["iconPath"], "C:\\game.exe");
         assert_eq!(json["showLabel"], false);
+        assert_eq!(json["iconImage"], "data:image/png;base64,AAAA");
         let back: Cell = serde_json::from_value(json).unwrap();
         assert_eq!(back, custom, "自定义字段序列化往返一致");
 

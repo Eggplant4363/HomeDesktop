@@ -420,7 +420,7 @@ export function moveIconToFolder(iconId: string, folderId: string): boolean {
   return false;
 }
 
-/** 自定义图标外观（M9）：重命名 / 换 emoji / 换颜色 / 借用系统应用图标 / 是否显示名称
+/** 自定义图标外观（M9）：重命名 / 换 emoji / 换颜色 / 借用系统应用图标 / 图片图标 / 是否显示名称
  *  （传 undefined 不改，传空字符串=清除） */
 export function updateIconAppearance(
   cellId: string,
@@ -429,6 +429,7 @@ export function updateIconAppearance(
     emoji?: string;
     color?: string;
     iconPath?: string;
+    iconImage?: string;
     showLabel?: boolean;
   },
 ): boolean {
@@ -437,6 +438,7 @@ export function updateIconAppearance(
     if (patch.emoji !== undefined) icon.emoji = patch.emoji ? patch.emoji : undefined;
     if (patch.color !== undefined) icon.color = patch.color ? patch.color : undefined;
     if (patch.iconPath !== undefined) icon.iconPath = patch.iconPath ? patch.iconPath : undefined;
+    if (patch.iconImage !== undefined) icon.iconImage = patch.iconImage ? patch.iconImage : undefined;
     if (patch.showLabel !== undefined) icon.showLabel = patch.showLabel;
   };
   for (const page of layout.pages) {
@@ -571,6 +573,15 @@ export function repairLayoutForPersist(): void {
       }
     }
   }
+}
+
+/** 显示层页数：分辨率变化紧凑重排时由 Grid 同步（0=用存储页数；>0=紧凑显示页数） */
+let _displayPageCount = $state(0);
+export function getDisplayPageCount(): number {
+  return _displayPageCount;
+}
+export function setDisplayPageCount(n: number): void {
+  if (Number.isInteger(n) && n >= 0) _displayPageCount = n;
 }
 
 /** 搜索聚焦（App 监听）：内部 $state + 派生读取函数（避免直接导出可变 $state） */

@@ -176,6 +176,40 @@ fn resolve_lnk(_path: &Path) -> Option<String> {
 
 // ---------- 系统应用图标 ----------
 
+/// 读取本地图片文件 → data URL（"来自图片"的自定义图标）。
+/// 只接受常见图片扩展名；文件过大返回 None（前端可先压缩）。
+#[tauri::command]
+pub async fn image_to_data_url(path: String) -> Result<Option<String>, String> {
+    crate::log::debug(&format!("image_to_data_url: {path}"));
+    tauri::async_runtime::spawn_blocking(move || -> Result<Option<String>, String> {
+        use base64::Engine;
+        const MAX_BYTES: u64 = 20 * 1024 * 1024; // 20MB 上限
+        let meta = std::fs::metadata(&path).map_err(|e| format!("读取失败: {e}"))?;
+        if meta.len() > MAX_BYTES {
+            return Ok(None);
+        }
+        let ext = std::path::Path::new(&path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let mime = match ext.as_str() {
+            "png" => "image/png",
+            "jpg" | "jpeg" => "image/jpeg",
+            "webp" => "image/webp",
+            "gif" => "image/gif",
+            "bmp" => "image/bmp",
+            "ico" => "image/x-icon",
+            _ => return Ok(None), // 非图片扩展名不支持
+        };
+        let data = std::fs::read(&path).map_err(|e| format!("读取失败: {e}"))?;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
+        Ok(Some(format!("data:{mime};base64,{b64}")))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// PNG → base64 data URL
 fn to_data_url(png: Vec<u8>) -> String {
     use base64::Engine;
