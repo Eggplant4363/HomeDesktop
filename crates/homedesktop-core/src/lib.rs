@@ -696,8 +696,11 @@ pub fn launch_plugin_action(plugin: &PluginInfo) -> Result<(), String> {
 fn launch_app(path: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
+        // CREATE_NO_WINDOW(0x08000000)：不弹出黑色 cmd 窗口
+        use std::os::windows::process::CommandExt;
         std::process::Command::new("cmd")
             .args(["/C", "start", "", path])
+            .creation_flags(0x08000000)
             .spawn()
             .map(|_| ())
             .map_err(|e| e.to_string())
@@ -723,8 +726,11 @@ fn launch_app(path: &str) -> Result<(), String> {
 fn run_command(cmd: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
+        // CREATE_NO_WINDOW(0x08000000)：不弹出黑色 cmd 窗口
+        use std::os::windows::process::CommandExt;
         std::process::Command::new("cmd")
             .args(["/C", cmd])
+            .creation_flags(0x08000000)
             .spawn()
             .map(|_| ())
             .map_err(|e| e.to_string())

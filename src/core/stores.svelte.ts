@@ -584,6 +584,31 @@ export function setDisplayPageCount(n: number): void {
   if (Number.isInteger(n) && n >= 0) _displayPageCount = n;
 }
 
+/** 修复页面内重叠：重叠的图标移到同页空闲位置（保持无重叠；正常的图标不动）。
+ *  拖拽落点只与第一个重叠单元交换，多格重叠时其余会残留 → 这里兜底清理。返回是否发生调整 */
+export function repairPageOverlaps(page = currentPage.index): boolean {
+  const arr = layout.pages[page];
+  if (!arr || arr.length < 2) return false;
+  const ordered = [...arr].sort(
+    (a, b) => (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0) || a.id.localeCompare(b.id),
+  );
+  const occupied: { x: number; y: number; w: number; h: number }[] = [];
+  let dirty = false;
+  for (const cell of ordered) {
+    const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
+    const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
+    const rect = { x: cell.x ?? 0, y: cell.y ?? 0, w, h };
+    if (occupied.some((o) => rectsOverlap(rect, o))) {
+      const slot = findFreeSlot(occupied, activePageCols, w, h, activePageRows);
+      cell.x = slot.x;
+      cell.y = slot.y;
+      dirty = true;
+    }
+    occupied.push({ x: cell.x ?? 0, y: cell.y ?? 0, w, h });
+  }
+  return dirty;
+}
+
 /** 搜索聚焦（App 监听）：内部 $state + 派生读取函数（避免直接导出可变 $state） */
 let _focus = $state<string | null>(null);
 
