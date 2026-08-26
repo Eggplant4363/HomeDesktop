@@ -12,7 +12,7 @@
   import { installPlugin, loadPlugins, launchCell } from "./core/pluginLoader";
   import type { AppInfo } from "./core/pluginLoader";
   import { loadLayout, saveLayout } from "./core/persistence";
-  import { clearFocusCell, getDisplayPageCount, getFocusCell, repackFolder } from "./core/stores.svelte";
+  import { clearFocusCell, getDisplayPageCount, getFocusCell, repairPageOverlaps, repackFolder } from "./core/stores.svelte";
   import {
     addCell,
     addIconToFolder,
@@ -854,6 +854,7 @@
     setCellSize(iconId, { w, h });
   }
   function handleResizeEnd(iconId: string): void {
+    if (repairPageOverlaps(currentPage.index)) log.info(`改尺寸后修复重叠: ${iconId}`);
     persist();
     log.info(`拖拽调整尺寸完成: ${iconId}`);
   }
@@ -865,6 +866,7 @@
 
   function handleApplySize(size: { w: number; h: number }): void {
     if (sizeTarget && setCellSize(sizeTarget, size)) {
+      if (repairPageOverlaps(currentPage.index)) log.info("设置尺寸后修复重叠");
       persist();
       log.info(`调整单元尺寸: ${sizeTarget} -> ${size.w}x${size.h}`);
       toast(`尺寸已设为 ${size.w}×${size.h}`);
@@ -879,6 +881,8 @@
   /** 页面级落点：目标槽被占用自动交换位置 */
   function handleDropAt(dragId: string, x: number, y: number): void {
     if (setCellPosition(dragId, x, y)) {
+      // 落点只与第一个重叠单元交换；多格重叠残留 → 修复到空闲位（保证不重叠）
+      if (repairPageOverlaps(currentPage.index)) log.info(`落点后修复重叠: ${dragId}`);
       persist();
       log.info(`摆放: ${dragId} -> (${x}, ${y})`);
     }

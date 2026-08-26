@@ -7,7 +7,7 @@
   import { currentPage, enterEditMode, plugins, setDisplayPageCount, ui } from "../core/stores.svelte";
   import { appearance } from "../core/appearance.svelte";
   import { filterCells } from "../core/search";
-  import { PAGE_COLS, setActivePageCols, setActivePageRows } from "../core/layout";
+  import { PAGE_COLS, findFreeSlot, rectsOverlap, setActivePageCols, setActivePageRows } from "../core/layout";
   import { log } from "../core/logger";
 
   let {
@@ -120,7 +120,8 @@
     return id ? cells.find((c) => c.id === id) : undefined;
   }
 
-  /** 窗口放不下（分辨率/窗口变小，任一页图标越界）：需要显示层紧凑重排 */
+  /** 窗口放不下（分辨率/窗口变小，任一页图标横向或纵向越出屏幕）：需要显示层紧凑重排。
+   *  拖拽已钳制在屏幕内（不会因拖动触发）；仅窗口/分辨率小于布局时触发，且可逆（不保存） */
   const needsPacked = $derived.by(() => {
     if (queryText) return false;
     for (const pg of pages) {
@@ -134,16 +135,17 @@
     return false;
   });
 
-  /** 紧凑重排（仅显示层，不修改存储坐标）——**每页独立、页内滚动、不跨页**：
-   *  每个存储页的图标按原顺序（行 → 列）在当前列数下逐行填充到**本页自己的显示页**；
-   *  本页放不下 → 页面纵向滚动查看（**页1的图标永远在页1**，不会散到第2/3/4页）；
-   *  页数保持与存储页一致（不产生"差别大"的额外页）；
+  /** 紧凑重排（仅显示层，不修改存储坐标）——**每页独立、超屏顺延、无滚动**：
+   *  每个存储页的图标按原顺序（行 → 列）在当前列数下逐行填充；
+   *  本页行数放不下 → 顺延到下一个显示页（不跨页混排、不滚动）；
+   *  下一个存储页从新的显示页开始；
    *  分辨率恢复后自动还原存储布局 */
   const packedPages = $derived.by(() => {
     const out: { page: number; x: number; y: number; cell: Cell }[] = [];
     if (!needsPacked) return out;
-    for (let pi = 0; pi < pages.length; pi++) {
-      const pg = pages[pi];
+    const cap = Math.max(1, maxRows);
+    let slot = 0;
+    for (const pg of pages) {
       if (pg.length === 0) continue;
       const ordered = [...pg].sort((a, b) => {
         const ay = a.y ?? 0, by = b.y ?? 0;
@@ -155,11 +157,12 @@
         const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
         const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
         if (cx + w > Math.max(1, cols)) { cx = 0; cy += rowH; rowH = 0; }
-        // 不跨页：超出视口行数时继续往下放，画布变高由纵向滚动查看
-        out.push({ page: pi, x: cx, y: cy, cell });
+        if (cy + h > cap) { slot += 1; cx = 0; cy = 0; rowH = 0; }
+        out.push({ page: slot, x: cx, y: cy, cell });
         cx += w;
         rowH = Math.max(rowH, h);
       }
+      slot += 1; // 下一个存储页从新的显示页开始
     }
     return out;
   });
@@ -196,6 +199,45 @@
       rowH = Math.max(rowH, h);
     }
     return map;
+  });
+
+  // 一次性修复（首次真实测量且布局已加载后）：把**重叠**或**超出屏幕**的图标移到屏幕内空闲位置并保存一次。
+  // 只动有问题的图标，正常的保持原位；之后拖拽已钳制（交换落点）不会再产生重叠/越界；
+  // 分辨率变化导致的越界由显示层紧凑重排可逆处理，不再改动存储。
+  let cleanedOnce = false;
+  $effect(() => {
+    if (cleanedOnce) return;
+    if (maxRows >= 500) return; // 尚未真实测量（初始 500）
+    const total = pages.reduce((n, pg) => n + pg.length, 0);
+    if (total === 0) return; // 布局尚未加载（无图标）→ 等内容出现后再清理
+    cleanedOnce = true;
+    let dirty = false;
+    for (const pg of pages) {
+      // 按原顺序（行→列）处理，维护已占位集合
+      const ordered = [...pg].sort(
+        (a, b) =>
+          (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0) || a.id.localeCompare(b.id),
+      );
+      const occupied: { x: number; y: number; w: number; h: number }[] = [];
+      for (const cell of ordered) {
+        const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
+        const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
+        const rect = { x: cell.x ?? 0, y: cell.y ?? 0, w, h };
+        const overlaps = occupied.some((o) => rectsOverlap(rect, o));
+        const belowFold = rect.y + rect.h > maxRows;
+        if (overlaps || belowFold) {
+          const slot = findFreeSlot(occupied, cols, w, h, maxRows);
+          cell.x = slot.x;
+          cell.y = slot.y;
+          dirty = true;
+        }
+        occupied.push({ x: cell.x ?? 0, y: cell.y ?? 0, w, h });
+      }
+    }
+    if (dirty) {
+      log.info(`布局修复: 重叠/超屏图标已移到屏幕内空闲位置（maxRows=${maxRows} cols=${cols}）`);
+      onfitted?.();
+    }
   });
 
   // 紧凑模式：把显示页数同步给外层（翻页/分页指示器用）；0=恢复用存储页数
@@ -465,7 +507,8 @@
     const ty = (cell?.y ?? 0) + Math.round(dy / slot);
     dragSlot = {
       x: Math.max(0, Math.min(cols - w, tx)),
-      y: Math.max(0, ty),
+      // 不能拖出屏幕：y 限制在可视行数内（不产生屏幕外图标、无滚动）
+      y: Math.max(0, Math.min(maxRows - h, ty)),
       w,
       h,
     };
@@ -633,8 +676,8 @@
   .grid {
     position: relative;
     height: 100%;
-    overflow-y: auto; /* 正常布局不超高无滚动条；分辨率变小紧凑显示超高时可滚动查看（不自动分页） */
-    overflow-x: auto; /* 极端窄窗口兜底：允许横向滚动查看 */
+    overflow-y: hidden; /* 图标不允许超出屏幕（拖拽钳制 + 紧凑重排），无需滚动 */
+    overflow-x: hidden; /* 不允许横向滚动 */
     touch-action: pan-y; /* 触屏：纵向滚动交给浏览器，长按/横向由应用处理 */
     /* 容器 tabindex=-1 可被点击聚焦；按键后 Chromium 会画默认黑色 focus ring → 禁用 */
     outline: none;
