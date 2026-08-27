@@ -201,19 +201,19 @@
     return map;
   });
 
-  // 一次性修复（首次真实测量且布局已加载后）：把**重叠**或**超出屏幕**的图标移到屏幕内空闲位置并保存一次。
-  // 只动有问题的图标，正常的保持原位；之后拖拽已钳制（交换落点）不会再产生重叠/越界；
-  // 分辨率变化导致的越界由显示层紧凑重排可逆处理，不再改动存储。
-  let cleanedOnce = false;
+  // 窗口变化（分辨率/窗口缩放/首次加载）时自动归一化：把**横向/纵向越出当前窗口**或**重叠**的图标
+  // 移到窗口内空闲位置并保存。保证布局始终适配当前窗口 → 不触发紧凑重排、编辑模式拖拽始终可用。
+  // 拖拽已钳制（不出屏、落点交换）不会产生新越界；正常图标保持原位不动。
+  let lastRepairKey = "";
   $effect(() => {
-    if (cleanedOnce) return;
+    void pages;
     if (maxRows >= 500) return; // 尚未真实测量（初始 500）
-    const total = pages.reduce((n, pg) => n + pg.length, 0);
-    if (total === 0) return; // 布局尚未加载（无图标）→ 等内容出现后再清理
-    cleanedOnce = true;
+    const key = `${cols}x${maxRows}`;
+    if (key === lastRepairKey) return;
+    lastRepairKey = key;
     let dirty = false;
     for (const pg of pages) {
-      // 按原顺序（行→列）处理，维护已占位集合
+      if (pg.length === 0) continue;
       const ordered = [...pg].sort(
         (a, b) =>
           (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0) || a.id.localeCompare(b.id),
@@ -223,9 +223,9 @@
         const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
         const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
         const rect = { x: cell.x ?? 0, y: cell.y ?? 0, w, h };
+        const outOfBounds = rect.x + rect.w > cols || rect.y + rect.h > maxRows;
         const overlaps = occupied.some((o) => rectsOverlap(rect, o));
-        const belowFold = rect.y + rect.h > maxRows;
-        if (overlaps || belowFold) {
+        if (outOfBounds || overlaps) {
           const slot = findFreeSlot(occupied, cols, w, h, maxRows);
           cell.x = slot.x;
           cell.y = slot.y;
@@ -235,7 +235,7 @@
       }
     }
     if (dirty) {
-      log.info(`布局修复: 重叠/超屏图标已移到屏幕内空闲位置（maxRows=${maxRows} cols=${cols}）`);
+      log.info(`窗口适配: 越界/重叠图标已移入当前窗口（${cols}x${maxRows}）`);
       onfitted?.();
     }
   });
@@ -315,7 +315,11 @@
   // 越界单元由 needsPacked 显示层紧凑排列兜底，分辨率恢复后自动还原存储布局。
 
   function onPointerDown(e: PointerEvent): void {
-    if ((e.target as HTMLElement).closest("button")) return; // 忽略操作按钮
+    // 只忽略磁贴自身的操作按钮（编辑/删除/缩放等），不忽略小组件内部按钮（如待办列表项）
+    if ((e.target as HTMLElement).closest(".actions, .resize-handle")) {
+      log.info(`[drag] 忽略操作按钮: ${(e.target as HTMLElement).tagName}`);
+      return;
+    }
     if (e.pointerType === "mouse" && e.button !== 0) return; // 仅鼠标左键
     pointerId = e.pointerId;
     startX = e.clientX;
@@ -324,6 +328,7 @@
     swipeRawDx = 0;
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-cell-id]");
     dragCandidate = el?.dataset.cellId ?? null;
+
     if (e.pointerType === "touch" && dragCandidate) {
       // 触屏：长按 → 进入编辑模式并拾取（苹果风格）
       longPressTimer = setTimeout(() => {
@@ -391,12 +396,14 @@
       }
     } else if (dist > 4 && ui.editMode) {
       // 仅编辑模式可拖拽移动（非编辑模式点击/滑动不拾取）
+
       beginDrag(dragCandidate);
     }
   }
 
   function onPointerUp(e: PointerEvent): void {
     clearLongPress();
+
     if (swipeActive) {
       swipeActive = false;
       suppressClick = true; // 阻止随后的 click（图标启动 / 空白隐藏）
@@ -431,6 +438,7 @@
 
   function onPointerCancel(): void {
     clearLongPress();
+
     swipeActive = false;
     swipeRawDx = 0;
     pointerId = null;
@@ -453,7 +461,12 @@
 
   function beginDrag(id: string): void {
     if (dragging) return;
-    if (needsPacked) return; // 紧凑显示模式（分辨率变化）下禁用拖拽，避免显示位与存储位错位
+    if (needsPacked) {
+      // [debug] 定位拖拽被禁原因
+
+      return;
+    }
+
     dragging = true;
     draggingId = id;
     const cell = cellById(id);
@@ -577,6 +590,7 @@
   class="grid"
   role="grid"
   tabindex="-1"
+  style="touch-action: {ui.editMode ? 'none' : 'pan-y'};"
   bind:this={gridEl}
   onpointerdown={onPointerDown}
   onpointermove={onPointerMove}
