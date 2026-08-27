@@ -146,7 +146,8 @@
   });
 
   function onPointerDown(e: PointerEvent): void {
-    if ((e.target as HTMLElement).closest("button")) return; // 忽略操作按钮
+    // 只忽略磁贴自身的操作按钮，不忽略小组件内部按钮（如待办列表项）
+    if ((e.target as HTMLElement).closest(".actions, .resize-handle")) return;
     const el = (e.target as HTMLElement).closest<HTMLElement>("[data-cell-id]");
     if (!el) return;
     pointerId = e.pointerId;
@@ -300,6 +301,7 @@
     class="grid"
     role="grid"
     tabindex="-1"
+    style="touch-action: {ui.editMode ? 'none' : 'pan-y'};"
     bind:this={gridEl}
     onpointerdown={onPointerDown}
     onpointermove={onPointerMove}

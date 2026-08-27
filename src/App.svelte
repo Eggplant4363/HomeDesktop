@@ -176,10 +176,16 @@
   let customSizeW = $state(2);
   let customSizeH = $state(2);
 
-  /** 设置菜单目标插件 */
+  /** 设置菜单目标插件（文件夹内图标同样可打开设置，如网页快捷方式改链接） */
   const settingsPlugin = $derived.by(() => {
     if (!settingsTarget) return undefined;
     for (const page of layout.pages) {
+      for (const c of page) {
+        if (c.kind === "folder") {
+          const icon = c.items.find((i) => i.id === settingsTarget);
+          if (icon) return plugins.find((p) => p.id === icon.pluginId);
+        }
+      }
       const cell = page.find((c) => c.id === settingsTarget);
       if (cell?.kind === "icon") return plugins.find((p) => p.id === cell.pluginId);
     }

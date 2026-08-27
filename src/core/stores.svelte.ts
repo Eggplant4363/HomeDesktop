@@ -584,7 +584,7 @@ export function setDisplayPageCount(n: number): void {
   if (Number.isInteger(n) && n >= 0) _displayPageCount = n;
 }
 
-/** 修复页面内重叠：重叠的图标移到同页空闲位置（保持无重叠；正常的图标不动）。
+/** 修复页面内重叠/越界：重叠或超出当前窗口的图标移到同页空闲位置（保持无重叠、不超屏；正常的图标不动）。
  *  拖拽落点只与第一个重叠单元交换，多格重叠时其余会残留 → 这里兜底清理。返回是否发生调整 */
 export function repairPageOverlaps(page = currentPage.index): boolean {
   const arr = layout.pages[page];
@@ -598,7 +598,9 @@ export function repairPageOverlaps(page = currentPage.index): boolean {
     const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
     const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
     const rect = { x: cell.x ?? 0, y: cell.y ?? 0, w, h };
-    if (occupied.some((o) => rectsOverlap(rect, o))) {
+    const outOfBounds = rect.x + rect.w > activePageCols || rect.y + rect.h > activePageRows;
+    const overlaps = occupied.some((o) => rectsOverlap(rect, o));
+    if (outOfBounds || overlaps) {
       const slot = findFreeSlot(occupied, activePageCols, w, h, activePageRows);
       cell.x = slot.x;
       cell.y = slot.y;
