@@ -117,16 +117,6 @@
 >
   {#if editMode}
     <div class="actions">
-      {#if onresize}
-        <button
-          class="act resize"
-          title="设置尺寸（整数倍）"
-          onclick={(e) => {
-            e.stopPropagation();
-            onresize?.(item.id);
-          }}
-        >⇲</button>
-      {/if}
       {#if onmove}
         <button
           class="act move"

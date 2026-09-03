@@ -2,6 +2,7 @@
   // 文件夹内图标（v3 自由摆放）：FOLDER_COLS 列虚拟画布，拖拽吸附网格、不自动重排
   import IconTile from "./IconTile.svelte";
   import WidgetTile from "./WidgetTile.svelte";
+  
   import {
     enterEditMode,
     findFolder,
@@ -15,6 +16,7 @@
 
   let {
     onaddclick,
+    breakingId = null,
     onlaunch,
     onmove,
     onediticon,
@@ -26,6 +28,8 @@
     onsettings,
   }: {
     onaddclick?: () => void;
+    /** 正在播放破碎删除动画的单元 id */
+    breakingId?: string | null;
     onlaunch?: (pluginId: string) => void;
     onmove?: (iconId: string) => void;
     onediticon?: (iconId: string) => void;
@@ -322,6 +326,7 @@
         <div
           class="cell-wrap"
           class:dragging={isDragging}
+          class:breaking={breakingId === icon.id}
           data-cell-id={icon.id}
           style="left:{pxX(icon)}px;top:{pxY(icon)}px;width:{pxW(icon)}px;height:{pxH(icon)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
         >
@@ -416,6 +421,15 @@
   }
   .cell-wrap.dragging {
     transition: none;
+  }
+  .cell-wrap.breaking {
+    animation: del-shrink 0.42s cubic-bezier(0.3, 0.9, 0.4, 1) both;
+    pointer-events: none;
+  }
+  @keyframes del-shrink {
+    0% { transform: scale(1) rotate(0); opacity: 1; }
+    18% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(0.1) rotate(-1.5deg); opacity: 0; }
   }
   .slot-ghost {
     position: absolute;

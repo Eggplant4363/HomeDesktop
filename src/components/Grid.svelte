@@ -2,12 +2,13 @@
   // 主桌面网格（v3 自由摆放）：虚拟画布（PAGE_COLS 列）内绝对定位，拖拽吸附网格、不自动重排
   import IconTile from "./IconTile.svelte";
   import FolderTile from "./FolderTile.svelte";
+  
   import WidgetTile from "./WidgetTile.svelte";
   import type { Cell, IconCell, PluginInfo } from "../core/types";
   import { currentPage, enterEditMode, plugins, setDisplayPageCount, ui } from "../core/stores.svelte";
   import { appearance } from "../core/appearance.svelte";
   import { filterCells } from "../core/search";
-  import { PAGE_COLS, findFreeSlot, rectsOverlap, setActivePageCols, setActivePageRows } from "../core/layout";
+  import { PAGE_COLS, setActivePageCols, setActivePageRows } from "../core/layout";
   import { log } from "../core/logger";
 
   let {
@@ -35,6 +36,8 @@
     onblankclick,
     /** 新添加的单元 id：播放"弹出 + 光环"入场特效（无则不高亮） */
     highlightId = null,
+    /** 正在播放破碎删除动画（删除确认后）的单元 id */
+    breakingId = null,
     /** 页面左右滑动切换：拖动中实时位移（px，阻尼后）；松手时原始位移（决定方向） */
     onswipemove,
     onswipeend,
@@ -54,6 +57,8 @@
     onresizeend?: (iconId: string) => void;
     onsettings?: (cellId: string) => void;
     highlightId?: string | null;
+    /** 正在播放破碎删除动画的单元 id */
+    breakingId?: string | null;
     /** 自由摆放落点：dragId 放到 (x, y) 网格坐标 */
     ondropat?: (dragId: string, x: number, y: number) => void;
     ondropinto?: (dragId: string, folderId: string) => void;
@@ -166,9 +171,9 @@
     }
     return out;
   });
-  /** 紧凑显示页数 = 存储页数（不产生额外页） */
-  const packedCount = $derived(pages.length || 1);
-  /** 当前显示页（=存储页序号） */
+  /** 紧凑显示页数 = 打包产生的最大显示页 + 1（存储页放不下会顺延成多个显示页） */
+  const packedCount = $derived(packedPages.length ? packedPages[packedPages.length - 1].page + 1 : pages.length || 1);
+  /** 当前显示页：紧凑模式下钳制到显示页范围 */
   const dispPage = $derived(needsPacked ? Math.min(currentPage.index, packedCount - 1) : currentPage.index);
   /** 紧凑位置表（全部显示页） */
   const packedPos = $derived.by(() => {
@@ -199,45 +204,6 @@
       rowH = Math.max(rowH, h);
     }
     return map;
-  });
-
-  // 窗口变化（分辨率/窗口缩放/首次加载）时自动归一化：把**横向/纵向越出当前窗口**或**重叠**的图标
-  // 移到窗口内空闲位置并保存。保证布局始终适配当前窗口 → 不触发紧凑重排、编辑模式拖拽始终可用。
-  // 拖拽已钳制（不出屏、落点交换）不会产生新越界；正常图标保持原位不动。
-  let lastRepairKey = "";
-  $effect(() => {
-    void pages;
-    if (maxRows >= 500) return; // 尚未真实测量（初始 500）
-    const key = `${cols}x${maxRows}`;
-    if (key === lastRepairKey) return;
-    lastRepairKey = key;
-    let dirty = false;
-    for (const pg of pages) {
-      if (pg.length === 0) continue;
-      const ordered = [...pg].sort(
-        (a, b) =>
-          (a.y ?? 0) - (b.y ?? 0) || (a.x ?? 0) - (b.x ?? 0) || a.id.localeCompare(b.id),
-      );
-      const occupied: { x: number; y: number; w: number; h: number }[] = [];
-      for (const cell of ordered) {
-        const w = cell.kind === "folder" ? (cell.size?.w ?? 1) : cell.size.w;
-        const h = cell.kind === "folder" ? (cell.size?.h ?? 1) : cell.size.h;
-        const rect = { x: cell.x ?? 0, y: cell.y ?? 0, w, h };
-        const outOfBounds = rect.x + rect.w > cols || rect.y + rect.h > maxRows;
-        const overlaps = occupied.some((o) => rectsOverlap(rect, o));
-        if (outOfBounds || overlaps) {
-          const slot = findFreeSlot(occupied, cols, w, h, maxRows);
-          cell.x = slot.x;
-          cell.y = slot.y;
-          dirty = true;
-        }
-        occupied.push({ x: cell.x ?? 0, y: cell.y ?? 0, w, h });
-      }
-    }
-    if (dirty) {
-      log.info(`窗口适配: 越界/重叠图标已移入当前窗口（${cols}x${maxRows}）`);
-      onfitted?.();
-    }
   });
 
   // 紧凑模式：把显示页数同步给外层（翻页/分页指示器用）；0=恢复用存储页数
@@ -282,7 +248,10 @@
   });
 
 
-  function measure(): void {
+  /** 正在破碎的单元格（仅非 pack 可见域取），用以定位 overlay */
+
+
+    function measure(): void {
     if (!gridEl) return;
     const style = getComputedStyle(gridEl);
     const t = parseFloat(style.getPropertyValue("--tile-size"));
@@ -317,7 +286,6 @@
   function onPointerDown(e: PointerEvent): void {
     // 只忽略磁贴自身的操作按钮（编辑/删除/缩放等），不忽略小组件内部按钮（如待办列表项）
     if ((e.target as HTMLElement).closest(".actions, .resize-handle")) {
-      log.info(`[drag] 忽略操作按钮: ${(e.target as HTMLElement).tagName}`);
       return;
     }
     if (e.pointerType === "mouse" && e.button !== 0) return; // 仅鼠标左键
@@ -461,11 +429,7 @@
 
   function beginDrag(id: string): void {
     if (dragging) return;
-    if (needsPacked) {
-      // [debug] 定位拖拽被禁原因
-
-      return;
-    }
+    if (needsPacked) return;
 
     dragging = true;
     draggingId = id;
@@ -615,6 +579,7 @@
           class="drop-wrap"
           class:dragging={isDragging}
           class:just-added={highlightId === cell.id && appearance.effects.iconAdd}
+          class:breaking={breakingId === cell.id}
           class:folder-over={isFolderOver}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
@@ -635,6 +600,7 @@
           class="drop-wrap"
           class:dragging={isDragging}
           class:just-added={highlightId === cell.id && appearance.effects.iconAdd}
+          class:breaking={breakingId === cell.id}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
         >
@@ -655,6 +621,7 @@
           class="drop-wrap"
           class:dragging={isDragging}
           class:just-added={highlightId === cell.id && appearance.effects.iconAdd}
+          class:breaking={breakingId === cell.id}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
         >
@@ -681,6 +648,7 @@
         style="left:{PAD + dragSlot.x * SLOT}px;top:{PAD + dragSlot.y * SLOT}px;width:{dragSlot.w * tile + (dragSlot.w - 1) * gap}px;height:{dragSlot.h * tile + (dragSlot.h - 1) * gap}px;"
       ></div>
     {/if}
+
 
 
   </div>
@@ -715,6 +683,25 @@
   /* 新添加图标特效：缩放弹出（highlightId 由 App 在添加时设置，1.6s 后清除；可在设置 → 特效 关闭） */
   .drop-wrap.just-added {
     animation: just-added-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  /* 删除动效（平滑收拢消失） */
+  .drop-wrap.breaking {
+    animation: delete-shrink 0.42s cubic-bezier(0.3, 0.9, 0.4, 1) both;
+    pointer-events: none;
+  }
+  @keyframes delete-shrink {
+    0% {
+      transform: scale(1) rotate(0);
+      opacity: 1;
+    }
+    18% {
+      transform: scale(1.05) rotate(0.5deg);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(0.1) rotate(-1.5deg);
+      opacity: 0;
+    }
   }
   @keyframes just-added-pop {
     0% {
