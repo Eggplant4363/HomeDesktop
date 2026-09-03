@@ -87,16 +87,6 @@
 >
   {#if editMode}
     <div class="actions">
-      {#if onresize}
-        <button
-          class="act"
-          title="设置尺寸"
-          onclick={(e) => {
-            e.stopPropagation();
-            onresize?.(folder.id);
-          }}
-        >⇲</button>
-      {/if}
       {#if onedit}
         <button
           class="edit"

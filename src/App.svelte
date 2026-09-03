@@ -76,6 +76,14 @@
   import { lyrics, closeLyrics } from "./core/lyricsState.svelte";
 
   let showAdd = $state(false);
+  /** 正在删除的单元 id：Grid/FolderView 上播破碎动画，播完再真正移除 */
+  let breakingId = $state<string | null>(null);
+  /** 播放破碎动画后执行 doIt（约 430ms 后关闭动画真正删除） */
+  function shatterThen(id: string | null, doIt: () => void): void {
+    if (!id) { doIt(); return; }
+    breakingId = id;
+    setTimeout(() => { breakingId = null; try { doIt(); } catch (e) { log.error(`删除执行失败: ${e}`); } }, 420);
+  }
   /** 新添加图标的 id（Grid 播放入场特效：弹出 + 光环），1.6s 后清除 */
   let addedFlashId = $state<string | null>(null);
   function flashAdded(id: string): void {
@@ -522,36 +530,27 @@
   function handleDelete(id: string): void {
     const cell = findPageCellById(id);
     if (!cell) return;
+    const name = cell.kind === "folder" ? cell.name : cell.title;
     if (cell.kind === "folder") {
       askConfirm(
         `删除文件夹「${cell.name}」？`,
         `文件夹内 ${cell.items.length} 个图标将一并删除，且无法撤销。`,
-        () => {
-          removeCell(id);
-          persist();
-          log.info(`删除文件夹: ${id} (${cell.name})`);
-        },
+        () => shatterThen(id, () => { removeCell(id); persist(); log.info(`删除文件夹: ${id}`); }),
       );
     } else {
-      askConfirm(`删除图标「${cell.title}」？`, "删除后无法撤销。", () => {
-        removeCell(id);
-        persist();
-        log.info(`删除图标: ${id} (${cell.title})`);
-      });
+      askConfirm(`删除图标「${cell.title}」？`, "删除后无法撤销。", () =>
+        shatterThen(id, () => { removeCell(id); persist(); log.info(`删除图标: ${id}`); }),
+      );
     }
   }
-
   /** 删除文件夹内图标（带确认） */
   function handleDeleteFolderItem(folderId: string, iconId: string): void {
     const folder = findFolderById(folderId);
     const icon = folder?.items.find((i) => i.id === iconId);
-    askConfirm(`删除「${icon?.title ?? iconId}」？`, "该图标将从文件夹中删除，且无法撤销。", () => {
-      removeIconFromFolder(folderId, iconId);
-      persist();
-      log.info(`删除文件夹内图标: ${folderId}/${iconId}`);
-    });
+    askConfirm(`删除「${icon?.title ?? iconId}」？`, "该图标将从文件夹中删除，且无法撤销。", () =>
+      shatterThen(iconId, () => { removeIconFromFolder(folderId, iconId); persist(); log.info(`删除文件夹内图标: ${folderId}`); }),
+    );
   }
-
   /** 在页面级查找单元格（不查文件夹内） */
   function findPageCellById(cellId: string): Cell | undefined {
     for (const page of layout.pages) {
@@ -1561,6 +1560,7 @@
     {#if inFolder}
       <div class="folder-wrap" transition:windowLike>
       <FolderView
+        breakingId={breakingId}
         onaddclick={() => (showAdd = true)}
         onlaunch={(id) => handleLaunch(id)}
         onmove={(id) => handleMove(id)}
@@ -1585,6 +1585,7 @@
           pages={layout.pages}
           queryText={query.text}
           highlightId={addedFlashId}
+          breakingId={breakingId}
         onlaunch={(id) => handleLaunch(id)}
         ondelete={(id) => handleDelete(id)}
         onaddclick={() => (showAdd = true)}
