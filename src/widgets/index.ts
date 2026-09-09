@@ -6,6 +6,12 @@ import SysMonitorWidget from "./SysMonitorWidget.svelte";
 import TodoWidget from "./TodoWidget.svelte";
 import MusicWidget from "./MusicWidget.svelte";
 import HaWidget from "./HaWidget.svelte";
+import ClipboardWidget from "./ClipboardWidget.svelte";
+import PomodoroWidget from "./PomodoroWidget.svelte";
+import AnniversaryWidget from "./AnniversaryWidget.svelte";
+import MarketQuotesWidget from "./MarketQuotesWidget.svelte";
+import NewsWidget from "./NewsWidget.svelte";
+import NetMonitorWidget from "./NetMonitorWidget.svelte";
 import type { Component } from "svelte";
 
 export interface WidgetDef {
@@ -21,6 +27,12 @@ export const widgetRegistry: Record<string, WidgetDef> = {
   todo: { component: TodoWidget, defaultSize: { w: 2, h: 2 } },
   music: { component: MusicWidget, defaultSize: { w: 3, h: 1 } },
   homeassistant: { component: HaWidget, defaultSize: { w: 3, h: 2 } },
+  clipboard: { component: ClipboardWidget, defaultSize: { w: 3, h: 2 } },
+  pomodoro: { component: PomodoroWidget, defaultSize: { w: 2, h: 2 } },
+  anniversary: { component: AnniversaryWidget, defaultSize: { w: 2, h: 2 } },
+  marketquotes: { component: MarketQuotesWidget, defaultSize: { w: 3, h: 2 } },
+  news: { component: NewsWidget, defaultSize: { w: 4, h: 2 } },
+  netmon: { component: NetMonitorWidget, defaultSize: { w: 2, h: 2 } },
 };
 
 export function getWidgetDef(component: string | undefined): WidgetDef | undefined {

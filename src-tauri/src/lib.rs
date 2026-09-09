@@ -1,4 +1,6 @@
 mod apps;
+mod clipboard;
+mod network;
 mod ha;
 mod ime;
 #[cfg(windows)]
@@ -54,8 +56,11 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         // 系统通知（插件通知能力）：timer 等插件到点后右下角弹 toast
         .plugin(tauri_plugin_notification::init())
+        .manage(clipboard::ClipState::default())
+        .manage(network::NetState::default())
         .setup(|app| {
             log::init(app.handle());
+            clipboard::start_watcher(app.handle().clone());
             // 插件目录加入 asset 作用域（M16：插件自带 JS 用 asset:// 加载）
             plugins::allow_asset_scope(app.handle());
             // 可配置快捷键：默认 Alt+Space（Pad 开关）
@@ -148,6 +153,10 @@ pub fn run() {
             ha::ha_states,
             ha::ha_call,
             ha::ha_entities,
+            clipboard::clip_state,
+            network::net_speed,
+            clipboard::clip_paste,
+            clipboard::clip_clear,
             stats::sys_stats,
             backup::backup_export,
             backup::backup_import,

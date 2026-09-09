@@ -1,0 +1,19 @@
+{
+  "id": "dev.homedesktop.pomodoro",
+  "name": "番茄钟",
+  "version": "0.1.0",
+  "type": "widget",
+  "emoji": "🍅",
+  "widgetComponent": "pomodoro",
+  "sizes": [
+    { "w": 2, "h": 2 },
+    { "w": 3, "h": 2 },
+    { "w": 4, "h": 3 }
+  ],
+  "settings": [
+    { "key": "workMin", "label": "专注时长(分)", "type": "number", "default": 25 },
+    { "key": "breakMin", "label": "休息时长(分)", "type": "number", "default": 5 },
+    { "key": "notify", "label": "到时通知", "type": "toggle", "default": true }
+  ],
+  "actions": []
+}
