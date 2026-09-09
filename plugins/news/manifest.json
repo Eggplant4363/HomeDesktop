@@ -1,0 +1,17 @@
+{
+  "id": "dev.homedesktop.news",
+  "name": "资讯聚合",
+  "version": "0.1.0",
+  "type": "widget",
+  "emoji": "📰",
+  "widgetComponent": "news",
+  "sizes": [
+    { "w": 4, "h": 2 },
+    { "w": 6, "h": 3 },
+    { "w": 8, "h": 3 }
+  ],
+  "settings": [
+    { "key": "refreshSec", "label": "刷新间隔(秒)", "type": "number", "default": 300 }
+  ],
+  "actions": []
+}

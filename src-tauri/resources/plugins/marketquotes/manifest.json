@@ -1,0 +1,17 @@
+{
+  "id": "dev.homedesktop.marketquotes",
+  "name": "行情速览",
+  "version": "0.1.0",
+  "type": "widget",
+  "emoji": "📈",
+  "widgetComponent": "marketquotes",
+  "sizes": [
+    { "w": 3, "h": 2 },
+    { "w": 4, "h": 2 },
+    { "w": 6, "h": 3 }
+  ],
+  "settings": [
+    { "key": "refreshSec", "label": "刷新间隔(秒)", "type": "number", "default": 60 }
+  ],
+  "actions": []
+}
