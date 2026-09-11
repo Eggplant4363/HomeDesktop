@@ -13,34 +13,24 @@
   import { appearance } from "../core/appearance.svelte";
   import type { IconCell, PluginInfo } from "../core/types";
   import { FOLDER_COLS } from "../core/layout";
+  // 阶段2：直接调用动作模块，替代外层透传的 on* 回调
+  import {
+    deleteFolderItem,
+    editIcon,
+    folderDropAt,
+    launch,
+    resizeEnd,
+    resizeTo,
+    toggleMoveTarget,
+    toggleSettingsTarget,
+  } from "../core/layoutActions.svelte";
+  import { editor } from "../core/editorState.svelte";
 
   let {
+    /** 文件夹内"＋ 添加"按钮 → 打开添加菜单 */
     onaddclick,
-    breakingId = null,
-    onlaunch,
-    onmove,
-    onediticon,
-    ondelete,
-    ondropat,
-    onresize,
-    onresizeto,
-    onresizeend,
-    onsettings,
   }: {
     onaddclick?: () => void;
-    /** 正在播放破碎删除动画的单元 id */
-    breakingId?: string | null;
-    onlaunch?: (pluginId: string) => void;
-    onmove?: (iconId: string) => void;
-    onediticon?: (iconId: string) => void;
-    /** 删除文件夹内图标（由外层统一弹确认框） */
-    ondelete?: (folderId: string, iconId: string) => void;
-    /** 自由摆放落点：文件夹内图标放到 (x, y) 网格坐标 */
-    ondropat?: (folderId: string, iconId: string, x: number, y: number) => void;
-    onresize?: (iconId: string) => void;
-    onresizeto?: (iconId: string, w: number, h: number) => void;
-    onresizeend?: (iconId: string) => void;
-    onsettings?: (cellId: string) => void;
   } = $props();
 
   const folder = $derived(
@@ -201,7 +191,7 @@
     if (!dragging) return;
     e.preventDefault();
     if (dragSlot && dragSlot.x >= 0 && folder) {
-      ondropat?.(folder.id, draggingId!, dragSlot.x, dragSlot.y);
+      folderDropAt(folder.id, draggingId!, dragSlot.x, dragSlot.y);
     }
     suppressClick = true;
     endDrag();
@@ -326,7 +316,7 @@
         <div
           class="cell-wrap"
           class:dragging={isDragging}
-          class:breaking={breakingId === icon.id}
+          class:breaking={editor.breakingId === icon.id}
           data-cell-id={icon.id}
           style="left:{pxX(icon)}px;top:{pxY(icon)}px;width:{pxW(icon)}px;height:{pxH(icon)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
         >
@@ -334,26 +324,25 @@
             <WidgetTile
               item={icon}
               editMode={ui.editMode}
-              ondelete={() => ondelete?.(folder.id, icon.id)}
-              onmove={() => onmove?.(icon.id)}
-              onresize={() => onresize?.(icon.id)}
-            onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
-            onresizeend={onresizeend ? (id) => onresizeend?.(id) : undefined}
-              onsettings={() => onsettings?.(icon.id)}
+              ondelete={() => deleteFolderItem(folder.id, icon.id)}
+              onmove={() => toggleMoveTarget(icon.id)}
+              onedit={() => editIcon(icon.id)}
+              onresizeto={resizeTo}
+              onresizeend={resizeEnd}
+              onsettings={() => toggleSettingsTarget(icon.id)}
             />
           {:else}
             <IconTile
               item={icon}
               plugin={pluginOf(icon)}
               editMode={ui.editMode}
-              onlaunch={() => !ui.editMode && onlaunch?.(icon.id)}
-              ondelete={() => ondelete?.(folder.id, icon.id)}
-              onmove={() => onmove?.(icon.id)}
-              onedit={() => onediticon?.(icon.id)}
-              onresize={() => onresize?.(icon.id)}
-            onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
-            onresizeend={onresizeend ? (id) => onresizeend?.(id) : undefined}
-              onsettings={() => onsettings?.(icon.id)}
+              onlaunch={() => !ui.editMode && launch(icon.id)}
+              ondelete={() => deleteFolderItem(folder.id, icon.id)}
+              onmove={() => toggleMoveTarget(icon.id)}
+              onedit={() => editIcon(icon.id)}
+              onresizeto={resizeTo}
+              onresizeend={resizeEnd}
+              onsettings={() => toggleSettingsTarget(icon.id)}
             />
           {/if}
         </div>

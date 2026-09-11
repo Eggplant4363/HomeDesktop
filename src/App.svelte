@@ -873,17 +873,7 @@
     {#if inFolder}
       <div class="folder-wrap" transition:windowLike>
       <FolderView
-        breakingId={editor.breakingId}
         onaddclick={() => (editor.showAdd = true)}
-        onlaunch={(id) => launch(id)}
-        onmove={(id) => toggleMoveTarget(id)}
-        onediticon={(id) => editIcon(id)}
-        ondelete={(fid, iid) => deleteFolderItem(fid, iid)}
-        ondropat={folderDropAt}
-        onresize={(id) => toggleSizeTargetCompat(id)}
-        onresizeto={(id, w, h) => resizeTo(id, w, h)}
-        onresizeend={(id) => resizeEnd(id)}
-        onsettings={(id) => toggleSettingsTarget(id)}
       />
       </div>
     {:else}
@@ -898,27 +888,7 @@
           pages={layout.pages}
           queryText={query.text}
           highlightId={editor.addedFlashId}
-          breakingId={editor.breakingId}
-        onlaunch={(id) => launch(id)}
-        ondelete={(id) => deleteCell(id)}
-        onaddclick={() => (editor.showAdd = true)}
-        onopenfolder={(id) => handleOpenFolder(id)}
-        oneditfolder={(id) => editFolder(id)}
-        onediticon={(id) => editIcon(id)}
-        onmoveicon={(id) => toggleMoveTarget(id)}
-        onresize={(id) => toggleSizeTargetCompat(id)}
-        onresizeto={(id, w, h) => resizeTo(id, w, h)}
-        onresizeend={(id) => resizeEnd(id)}
-        onsettings={(id) => toggleSettingsTarget(id)}
-        ondropat={dropAt}
-        ondropinto={dropIntoFolder}
-        onflipprev={handlePrev}
-        onflipnext={handleNext}
-        onwheelnav={(dir) => onSwipeEnd(-dir * (slideWrapEl?.clientWidth || window.innerWidth) * 0.3)}
-          onfitted={() => persist()}
-          onblankclick={hideWindow}
-          onswipemove={onSwipeMove}
-          onswipeend={onSwipeEnd}
+          onwheelnav={(dir) => onSwipeEnd(-dir * (slideWrapEl?.clientWidth || window.innerWidth) * 0.3)}
         />
       </div>
     {/if}

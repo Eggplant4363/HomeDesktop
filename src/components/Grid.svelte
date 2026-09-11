@@ -10,68 +10,43 @@
   import { filterCells } from "../core/search";
   import { PAGE_COLS, setActivePageCols, setActivePageRows } from "../core/layout";
   import { log } from "../core/logger";
+  // 阶段2：直接调用动作模块，替代原先 App 逐层透传的 on* 回调
+  import {
+    deleteCell,
+    editFolder,
+    editIcon,
+    folderDropAt,
+    launch,
+    openFolderById,
+    dropAt,
+    dropIntoFolder,
+    resizeEnd,
+    resizeTo,
+    toggleMoveTarget,
+    toggleSettingsTarget,
+    persist,
+    prevPage,
+    nextPage,
+  } from "../core/layoutActions.svelte";
+  import { editor } from "../core/editorState.svelte";
+  import { hideWindow, onSwipeMove, onSwipeEnd, winFx } from "../core/windowFx.svelte";
 
   let {
     cells,
     /** 全部页面（紧凑重排时跨页按原顺序分页显示用） */
     pages,
     queryText = "",
-    onlaunch,
-    ondelete,
-    onaddclick,
-    onopenfolder,
-    oneditfolder,
-    onediticon,
-    onmoveicon,
-    onresize,
-    onresizeto,
-    onresizeend,
-    onsettings,
-    ondropat,
-    ondropinto,
-    onflipprev,
-    onflipnext,
-    onwheelnav,
-    onfitted,
-    onblankclick,
     /** 新添加的单元 id：播放"弹出 + 光环"入场特效（无则不高亮） */
     highlightId = null,
-    /** 正在播放破碎删除动画（删除确认后）的单元 id */
-    breakingId = null,
-    /** 页面左右滑动切换：拖动中实时位移（px，阻尼后）；松手时原始位移（决定方向） */
-    onswipemove,
-    onswipeend,
+    /** 滚动翻页动画由外层 App 提供（含滑动转场） */
+    onwheelnav,
   }: {
     cells: Cell[];
     pages: Cell[][];
     queryText?: string;
-    onlaunch?: (pluginId: string) => void;
-    ondelete?: (id: string) => void;
-    onaddclick?: () => void;
-    onopenfolder?: (folderId: string) => void;
-    oneditfolder?: (folderId: string) => void;
-    onediticon?: (iconId: string) => void;
-    onmoveicon?: (iconId: string) => void;
-    onresize?: (iconId: string) => void;
-    onresizeto?: (iconId: string, w: number, h: number) => void;
-    onresizeend?: (iconId: string) => void;
-    onsettings?: (cellId: string) => void;
     highlightId?: string | null;
-    /** 正在播放破碎删除动画的单元 id */
-    breakingId?: string | null;
-    /** 自由摆放落点：dragId 放到 (x, y) 网格坐标 */
-    ondropat?: (dragId: string, x: number, y: number) => void;
-    ondropinto?: (dragId: string, folderId: string) => void;
-    onflipprev?: () => void;
-    onflipnext?: () => void;
-    /** 滚轮翻页（带滑动动画） */
+    /** 滚轮翻页（带滑动动画，动画逻辑归 App/windowFx） */
     onwheelnav?: (dir: 1 | -1) => void;
-    /** 画布适配调整了布局后回调（用于持久化） */
-    onfitted?: () => void;
-    /** 点击空白区域（非编辑模式、非拖拽）→ 外层隐藏应用 */
-    onblankclick?: () => void;
-    onswipemove?: (dx: number) => void;
-    onswipeend?: (dx: number) => void;
   } = $props();
 
   // ---------- 拖拽（Pointer Events：鼠标移动即拖、触屏长按拾取；仅编辑模式可移动） ----------
@@ -347,7 +322,7 @@
       if (swipeActive) {
         e.preventDefault();
         swipeRawDx = dx;
-        onswipemove?.((dx - Math.sign(dx) * SWIPE_START) * SWIPE_FACTOR);
+        onSwipeMove((dx - Math.sign(dx) * SWIPE_START) * SWIPE_FACTOR);
         return;
       }
     }
@@ -385,7 +360,7 @@
       } catch {
         /* 忽略 */
       }
-      onswipeend?.(dx);
+      onSwipeEnd(dx);
       return;
     }
     if (!dragging) {
@@ -396,9 +371,9 @@
     }
     e.preventDefault();
     if (overFolderId && overFolderId !== draggingId) {
-      ondropinto?.(draggingId!, overFolderId);
+      dropIntoFolder(draggingId!, overFolderId);
     } else if (dragSlot && dragSlot.x >= 0) {
-      ondropat?.(draggingId!, dragSlot.x, dragSlot.y);
+      dropAt(draggingId!, dragSlot.x, dragSlot.y);
     }
     suppressClick = true;
     endDrag();
@@ -423,7 +398,7 @@
     }
     // 点击空白区域（画布/网格背景，非图标）→ 隐藏应用（编辑模式/拖拽中不触发）
     if (!ui.editMode && !dragging && (e.target === canvasEl || e.target === gridEl)) {
-      onblankclick?.();
+      hideWindow();
     }
   }
 
@@ -505,8 +480,8 @@
         edgeTimer = setTimeout(() => {
           edgeTimer = undefined;
           lastFlip = Date.now();
-          if (goPrev) onflipprev?.();
-          else onflipnext?.();
+          if (goPrev) prevPage();
+          else nextPage(winFx.totalPages);
         }, 650);
       }
     } else if (edgeTimer) {
@@ -579,7 +554,7 @@
           class="drop-wrap"
           class:dragging={isDragging}
           class:just-added={highlightId === cell.id && appearance.effects.iconAdd}
-          class:breaking={breakingId === cell.id}
+          class:breaking={editor.breakingId === cell.id}
           class:folder-over={isFolderOver}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
@@ -587,12 +562,11 @@
           <FolderTile
             folder={cell}
             editMode={ui.editMode}
-            onopen={() => !ui.editMode && onopenfolder?.(cell.id)}
-            onedit={() => oneditfolder?.(cell.id)}
-            ondelete={() => ondelete?.(cell.id)}
-            onresize={() => onresize?.(cell.id)}
-            onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
-            onresizeend={onresizeend ? (id) => onresizeend?.(id) : undefined}
+            onopen={() => !ui.editMode && openFolderById(cell.id)}
+            onedit={() => editFolder(cell.id)}
+            ondelete={() => deleteCell(cell.id)}
+            onresizeto={resizeTo}
+            onresizeend={resizeEnd}
           />
         </div>
       {:else if isWidgetCell(cell)}
@@ -600,20 +574,19 @@
           class="drop-wrap"
           class:dragging={isDragging}
           class:just-added={highlightId === cell.id && appearance.effects.iconAdd}
-          class:breaking={breakingId === cell.id}
+          class:breaking={editor.breakingId === cell.id}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
         >
           <WidgetTile
             item={cell}
             editMode={ui.editMode}
-            ondelete={() => ondelete?.(cell.id)}
-            onmove={() => onmoveicon?.(cell.id)}
-            onedit={() => onediticon?.(cell.id)}
-                        onresize={() => onresize?.(cell.id)}
-            onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
-            onresizeend={onresizeend ? (id) => onresizeend?.(id) : undefined}
-            onsettings={() => onsettings?.(cell.id)}
+            ondelete={() => deleteCell(cell.id)}
+            onmove={() => toggleMoveTarget(cell.id)}
+            onedit={() => editIcon(cell.id)}
+            onresizeto={resizeTo}
+            onresizeend={resizeEnd}
+            onsettings={() => toggleSettingsTarget(cell.id)}
           />
         </div>
       {:else}
@@ -621,7 +594,7 @@
           class="drop-wrap"
           class:dragging={isDragging}
           class:just-added={highlightId === cell.id && appearance.effects.iconAdd}
-          class:breaking={breakingId === cell.id}
+          class:breaking={editor.breakingId === cell.id}
           data-cell-id={cell.id}
           style="left:{pxX(cell)}px;top:{pxY(cell)}px;width:{pxW(cell)}px;height:{pxH(cell)}px;{isDragging ? `transform: translate(${dragDx}px,${dragDy}px);z-index:20;opacity:.8;` : ""}"
         >
@@ -629,14 +602,13 @@
             item={cell}
             plugin={pluginOf(cell)}
             editMode={ui.editMode}
-            onlaunch={() => !ui.editMode && onlaunch?.(cell.id)}
-            ondelete={() => ondelete?.(cell.id)}
-            onmove={() => onmoveicon?.(cell.id)}
-            onedit={() => onediticon?.(cell.id)}
-                        onresize={() => onresize?.(cell.id)}
-            onresizeto={onresizeto ? (id, w, h) => onresizeto?.(id, w, h) : undefined}
-            onresizeend={onresizeend ? (id) => onresizeend?.(id) : undefined}
-            onsettings={() => onsettings?.(cell.id)}
+            onlaunch={() => !ui.editMode && launch(cell.id)}
+            ondelete={() => deleteCell(cell.id)}
+            onmove={() => toggleMoveTarget(cell.id)}
+            onedit={() => editIcon(cell.id)}
+            onresizeto={resizeTo}
+            onresizeend={resizeEnd}
+            onsettings={() => toggleSettingsTarget(cell.id)}
           />
         </div>
       {/if}
