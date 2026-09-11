@@ -34,9 +34,16 @@ mod backup;
 mod config;
 mod log;
 mod notify;
+mod layout;
+mod market;
 mod plugins;
+mod web;
 mod shortcuts;
 mod stats;
+
+use layout::{layout_load, layout_save, launch_action, launch_cell};
+use market::{market_remote_install, market_remote_list, market_scan, plugins_install};
+use web::{web_fetch_icon, web_fetch_title};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -128,17 +135,17 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             plugins::plugins_list,
-            plugins::layout_load,
-            plugins::layout_save,
-            plugins::launch_action,
-            plugins::launch_cell,
-            plugins::plugins_install,
+            layout_load,
+            layout_save,
+            launch_action,
+            launch_cell,
+            plugins_install,
             plugins::plugins_uninstall,
-            plugins::market_scan,
-            plugins::market_remote_list,
-            plugins::market_remote_install,
-            plugins::web_fetch_title,
-            plugins::web_fetch_icon,
+            market_scan,
+            market_remote_list,
+            market_remote_install,
+            web_fetch_title,
+            web_fetch_icon,
             config::config_get,
             config::config_set,
             config::set_wallpaper,

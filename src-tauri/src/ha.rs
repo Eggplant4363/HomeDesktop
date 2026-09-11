@@ -33,7 +33,7 @@ pub async fn ha_states(
     entities: Vec<String>,
 ) -> Result<Vec<HaState>, String> {
     let base = url.trim_end_matches('/').to_string();
-    let agent = crate::plugins::fetch_agent();
+    let agent = crate::web::fetch_agent();
     tauri::async_runtime::spawn_blocking(move || {
         let res = agent
             .get(&format!("{base}/api/states"))
@@ -82,7 +82,7 @@ pub async fn ha_entities(
     domain: Option<String>,
 ) -> Result<Vec<HaState>, String> {
     let base = url.trim_end_matches('/').to_string();
-    let agent = crate::plugins::fetch_agent();
+    let agent = crate::web::fetch_agent();
     tauri::async_runtime::spawn_blocking(move || {
         let res = agent
             .get(&format!("{base}/api/states"))
@@ -136,7 +136,7 @@ pub async fn ha_call(
     entity_id: String,
 ) -> Result<(), String> {
     let base = url.trim_end_matches('/').to_string();
-    let agent = crate::plugins::fetch_agent();
+    let agent = crate::web::fetch_agent();
     tauri::async_runtime::spawn_blocking(move || {
         let body = serde_json::json!({ "entity_id": entity_id });
         let res = agent
