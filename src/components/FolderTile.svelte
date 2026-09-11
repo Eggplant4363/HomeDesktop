@@ -2,6 +2,7 @@
   import type { FolderCell } from "../core/types";
   import { appearance } from "../core/appearance.svelte";
   import { iconGlyphSize, ICON_TEXT_GAP } from "../core/iconStandard";
+  import { createTileResize } from "./tileResize.svelte";
 
   let {
     folder,
@@ -32,47 +33,16 @@
   /** 图标与应用图标同尺寸（iconStandard 统一标准） */
   const iconSize = $derived(iconGlyphSize(appearance.tileSize));
 
-  // ---------- 拖拽缩放（整格吸附，1..8） ----------
-  let resizing = false;
-  let rsx = 0, rsy = 0, rsw = 0, rsh = 0, rSlot = 0;
-  function startResize(e: PointerEvent): void {
-    if (!onresizeto) return;
-    e.preventDefault();
-    e.stopPropagation();
-    resizing = true;
-    rsx = e.clientX;
-    rsy = e.clientY;
-    rsw = w;
-    rsh = h;
-    const el = e.currentTarget as HTMLElement;
-    const style = getComputedStyle(el);
-    const t = parseFloat(style.getPropertyValue("--tile-size"));
-    const g = parseFloat(style.getPropertyValue("--gap"));
-    if (Number.isFinite(t) && t > 0) rSlot = t + (Number.isFinite(g) && g >= 0 ? g : 0);
-    try {
-      el.setPointerCapture(e.pointerId);
-    } catch {
-      /* 忽略 */
-    }
-  }
-  function onResizeMove(e: PointerEvent): void {
-    if (!resizing) return;
-    e.preventDefault();
-    const snap = (n: number) => Math.max(1, Math.min(8, Math.round(n)));
-    const nw = snap(rsw + (e.clientX - rsx) / rSlot);
-    const nh = snap(rsh + (e.clientY - rsy) / rSlot);
-    onresizeto?.(folder.id, nw, nh);
-  }
-  function endResize(e: PointerEvent): void {
-    if (!resizing) return;
-    resizing = false;
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {
-      /* 忽略 */
-    }
-    onresizeend?.(folder.id);
-  }
+  // ---------- 拖拽缩放（阶段5：共用 createTileResize，整格吸附） ----------
+  const resize = createTileResize(
+    () => ({ id: folder.id, w, h }),
+    {
+      onresizeto: (id, nw, nh) => onresizeto?.(id, nw, nh),
+      onresizeend: (id) => onresizeend?.(id),
+    },
+    { step: 1 },
+  );
+  const { startResize, onResizeMove, endResize } = resize;
 </script>
 
 <div

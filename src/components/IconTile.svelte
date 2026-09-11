@@ -4,6 +4,7 @@
   import type { IconCell, PluginInfo } from "../core/types";
   import { appearance } from "../core/appearance.svelte";
   import { iconGlyphSize, iconEmojiFontSize, iconRadius } from "../core/iconStandard";
+  import { createTileResize } from "./tileResize.svelte";
 
   let {
     item,
@@ -34,53 +35,16 @@
     onresizeend?: (id: string) => void;
   } = $props();
 
-  // ---------- 拖拽缩放手柄 ----------
-  let resizing = false;
-  let rsx = 0;
-  let rsy = 0;
-  let rsw = 0;
-  let rsh = 0;
-  let rSlot = 120;
-
-  function startResize(e: PointerEvent): void {
-    e.preventDefault();
-    e.stopPropagation();
-    resizing = true;
-    rsx = e.clientX;
-    rsy = e.clientY;
-    rsw = item.size?.w ?? 1;
-    rsh = item.size?.h ?? 1;
-    const el = e.currentTarget as HTMLElement;
-    const style = getComputedStyle(el);
-    const t = parseFloat(style.getPropertyValue("--tile-size"));
-    const g = parseFloat(style.getPropertyValue("--gap"));
-    if (Number.isFinite(t) && t > 0) rSlot = t + (Number.isFinite(g) && g >= 0 ? g : 0);
-    try {
-      el.setPointerCapture(e.pointerId);
-    } catch {
-      /* 忽略 */
-    }
-  }
-
-  function onResizeMove(e: PointerEvent): void {
-    if (!resizing) return;
-    e.preventDefault();
-    const snap = (n: number) => Math.max(1, Math.min(8, Math.round(n * 2) / 2));
-    const w = snap(rsw + (e.clientX - rsx) / rSlot);
-    const h = snap(rsh + (e.clientY - rsy) / rSlot);
-    onresizeto?.(item.id, w, h);
-  }
-
-  function endResize(e: PointerEvent): void {
-    if (!resizing) return;
-    resizing = false;
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {
-      /* 忽略 */
-    }
-    onresizeend?.(item.id);
-  }
+  // ---------- 拖拽缩放手柄（阶段5：共用 createTileResize） ----------
+  const resize = createTileResize(
+    () => ({ id: item.id, w: item.size?.w ?? 1, h: item.size?.h ?? 1 }),
+    {
+      onresizeto: (id, w, h) => onresizeto?.(id, w, h),
+      onresizeend: (id) => onresizeend?.(id),
+    },
+    { step: 0.5 },
+  );
+  const { startResize, onResizeMove, endResize } = resize;
 
   /** 图标尺寸随网格等比缩放（占格子约 50%，给标签留空间） */
   // 图标留出文字空间：icon+文字 完整居中放进格子，上下位置一致
