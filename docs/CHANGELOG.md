@@ -8,6 +8,21 @@
 - **小版本（patch，x.y.z+1）**：小功能叠加、bug 修复、体验优化（如 v0.4.1）
 - **大版本（minor/major，x.y+1 或 x+1.0）**：大的功能变更、核心交互改变（如 v0.5.0、v1.0.0）
 - 由开发自主判断归类并决定版本号；发布流程固定：release/x.y.z 分支 → 版本号 → 合并 → 标签 → CI 构建 → 草稿 Release
+## 2026-09-11（发布 v0.12.1：框架重构，无行为变化）🔧
+
+- **内容**（自 v0.12.0，纯内部结构重构，功能与界面行为不变）：
+  - 🧩 **前端分层**：App.svelte 2147 → 501 行，拆出 `core/editorState`（弹窗/编辑器状态、toast、确认框、删除动效）、
+    `core/windowFx`（窗口显隐动画、页面滑动）、`core/layoutActions`（增删改/拖放/启动/插件安装/备份）、
+    `core/appSettingsActions`（外观/系统/代理）、`core/iconImage`（图片图标）
+  - 🧩 **弹窗组件化**：新增 `SettingsDialog` / `EditDialogs` 组件
+  - 🔗 **消除回调钻透**：Grid 回调 20 → 1、FolderView 10 → 1，改为直接调用动作模块
+  - 🗂 **状态分层**：`stores.svelte.ts` 701 行拆为 `layoutStore` / `cellOps` / `folderOps`（保留门面，既有 import 路径不变）
+  - 🦀 **Rust 分层**：core crate 拆 `schema`/`migrate`/`discovery`/`persist`/`action`/`png`（lib.rs 1222→580 行）；
+    src-tauri 拆 `layout`/`market`/`web`（plugins.rs 858→72 行）
+  - ♻️ **共用缩放逻辑**：三磁贴重复的 ⤡ 拖拽缩放收敛为 `components/tileResize.svelte.ts`
+- **验证**：`svelte-check` 0 error；`vitest` 11 files / 90 tests 通过（与重构前基线一致）；
+  `cargo test -p homedesktop-core` 22 passed；各阶段 `tauri dev` 实机启动正常
+- **发布流程**：release/v0.12.1 分支 → 版本号 0.12.0→0.12.1 → 合并回 main → 打标签 v0.12.1 → CI 自动构建并创建草稿 Release
 ## 2026-09-09（发布 v0.12.0：六款新小组件 + 剪贴板/网络 Rust 后端）✅
 
 - **内容**（自 v0.11.3）：
